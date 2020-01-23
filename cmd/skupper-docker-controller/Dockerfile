@@ -4,6 +4,7 @@ WORKDIR /go/src/app
 COPY . .
 
 RUN go get -d -v ./...
+RUN rm -rf /go/src/github.com/skupperproject/skupper-docker/vendor
 RUN go install -v ./...
 
 CMD ["app"]
