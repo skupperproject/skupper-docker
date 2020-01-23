@@ -25,7 +25,7 @@ release/windows/skupper-docker: cmd/skupper-docker-cli/main.go
 release/windows.zip: release/windows/skupper-docker
 	zip -j release/windows.zip release/windows/skupper-docker
 
-release/darwin/skupper-docker: cmd/skupper-docker/main.go
+release/darwin/skupper-docker: cmd/skupper-docker-cli/main.go
 	GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o release/darwin/skupper-docker cmd/skupper-docker-cli/main.go
 
 release/darwin.zip: release/darwin/skupper-docker
