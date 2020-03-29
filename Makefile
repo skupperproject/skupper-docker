@@ -1,15 +1,22 @@
 VERSION := $(shell git describe --tags --dirty=-modified)
+IMAGE := quay.io/skupper/skupper-docker-controller
 
-all: build
+all: build-cmd build-controller
 
-build:
+build-cmd:
 	go build -ldflags="-X main.version=${VERSION}"  -o skupper-docker cmd/skupper-docker-cli/main.go
 
-clean:
-	rm -rf skupper-docker release
+build-controller:
+	go build -ldflags="-X main.version=${VERSION}"  -o skupper-docker-controller cmd/skupper-docker-controller/main.go
 
-deps:
-	dep ensure
+docker-build:
+	docker build -t ${IMAGE} .
+
+docker-push:
+	docker push ${IMAGE}
+
+clean:
+	rm -rf skupper-docker skupper-docker-controller release
 
 package: release/windows.zip release/darwin.zip release/linux.tgz
 
