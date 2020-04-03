@@ -1072,7 +1072,7 @@ func startServiceSync(dd libdocker.Interface) {
 		if os.Getenv("SERVICE_SYNC_IMAGE") != "" {
 			imageName = os.Getenv("PROXY_CONTROLLER_IMAGE")
 		} else {
-			imageName = "quay.io/skupper/skupper-docker-proxy-controller"
+			imageName = "quay.io/skupper/skupper-docker-controller"
 		}
 		err := dd.PullImage(imageName, dockertypes.AuthConfig{}, dockertypes.ImagePullOptions{})
 		if err != nil {
@@ -1082,7 +1082,7 @@ func startServiceSync(dd libdocker.Interface) {
 		containerCfg := &dockercontainer.Config{
 			Hostname: "skupper-proxy-controller",
 			Image:    imageName,
-			Cmd:      []string{"app"},
+			Cmd:      []string{"/go/src/app/controller"},
 			Env:      []string{"SKUPPER_SERVICE_SYNC_ORIGIN=" + origin},
 		}
 		hostCfg := &dockercontainer.HostConfig{
