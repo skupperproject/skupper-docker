@@ -531,7 +531,7 @@ func routerContainerConfig(router *Router) *dockercontainer.Config {
 		Env:      routerEnv(router),
 		Healthcheck: &dockercontainer.HealthConfig{
 			Test:        []string{"curl --fail -s http://localhost:9090/healthz || exit 1"},
-			StartPeriod: time.Duration(60),
+			StartPeriod: (time.Duration(60)*time.Second),
 		},
 		Labels:       labels,
 		ExposedPorts: routerPorts(router),
@@ -608,7 +608,7 @@ func restartRouterContainer(dd libdocker.Interface) {
 			Image:    current.Config.Image,
 			Healthcheck: &dockercontainer.HealthConfig{
 				Test:        []string{"curl --fail -s http://localhost:9090/healthz || exit 1"},
-				StartPeriod: time.Duration(60),
+				StartPeriod: (time.Duration(60)*time.Second),
 			},
 			Labels:       current.Config.Labels,
 			ExposedPorts: current.Config.ExposedPorts,
