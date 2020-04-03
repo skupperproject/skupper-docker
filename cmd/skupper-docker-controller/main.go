@@ -9,10 +9,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"pack.ag/amqp"
 	"strconv"
 	"strings"
 	"time"
+
+	amqp "github.com/Azure/go-amqp"
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
@@ -20,9 +21,9 @@ import (
 	dockermounttypes "github.com/docker/docker/api/types/mount"
 	dockernetworktypes "github.com/docker/docker/api/types/network"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
 	skupperservice "github.com/skupperproject/skupper-docker/pkg/service"
-	"github.com/fsnotify/fsnotify"
 )
 
 const (
