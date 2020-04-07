@@ -1,8 +1,8 @@
 package client
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -13,7 +13,7 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
 )
 
-func generateConnectorName(path string) string {
+func generateConnectorName(path string) (string, error) {
 	files, err := ioutil.ReadDir(path)
 	max := 1
 	if err == nil {
@@ -28,9 +28,9 @@ func generateConnectorName(path string) string {
 			}
 		}
 	} else {
-		log.Fatal("Could not retrieve configured connectors (need init?): ", err.Error())
+		return "", fmt.Errorf("Could not retrieve configured connectors (need init?): %w", err)
 	}
-	return "conn" + strconv.Itoa(max)
+	return "conn" + strconv.Itoa(max), nil
 }
 
 func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanConnectorCreateOptions) error {
@@ -38,28 +38,30 @@ func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanCon
 	// TODO certs should return err
 	secret := certs.GetSecretContent(secretFile)
 	if secret == nil {
-		log.Println("Failed to make connector, missing connection-token content")
-		return nil
+		return fmt.Errorf("Failed to make connector, missing connection-token content")
 	}
 
 	existing, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
-		log.Println("Failed to retrieve transport container (need init?): ", err.Error())
+		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
 	mode := qdr.GetTransportMode(existing)
 
 	if options.Name == "" {
-		options.Name = generateConnectorName(types.ConnPath)
+		options.Name, err = generateConnectorName(types.ConnPath)
+		if err != nil {
+			return err
+		}
 	}
 	connPath := types.ConnPath + options.Name
 
 	if err := os.Mkdir(connPath, 0755); err != nil {
-		log.Println("Failed to create skupper connector directory: ", err.Error())
+		return fmt.Errorf("Failed to create skupper connector directory: %w", err)
 	}
 	for k, v := range secret {
 		if err := ioutil.WriteFile(connPath+"/"+k, v, 0755); err != nil {
-			log.Println("Failed to write connector certificate file: ", err.Error())
+			return fmt.Errorf("Failed to write connector certificate file: %w", err)
 		}
 	}
 
@@ -80,16 +82,15 @@ func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanCon
 		connector.Port = string(portString)
 		connector.Role = string(types.ConnectorRoleEdge)
 	}
-	log.Printf("Skupper configured to connect to %s:%s (name=%s)\n", connector.Host, connector.Port, connector.Name)
 
 	err = docker.RestartTransportContainer(cli.DockerInterface)
 	if err != nil {
-		log.Println("Failed to re-start transport container: ", err.Error())
+		return fmt.Errorf("Failed to re-start transport container: %w", err)
 	}
 
 	err = docker.RestartControllerContainer(cli.DockerInterface)
 	if err != nil {
-	    log.Println("Failed to re-start controller container", err.Error())
+		return fmt.Errorf("Failed to re-start controller container: %w", err)
 	}
 
 	return err

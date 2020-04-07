@@ -1,7 +1,7 @@
 package client
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/skupperproject/skupper-docker/api/types"
@@ -12,24 +12,24 @@ func (cli *VanClient) VanConnectorRemove(name string) error {
 
 	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
-		log.Println("Failed to retrieve transport container", err.Error())
+		return fmt.Errorf("Failed to retrieve transport container: %w", err)
 	}
 
 	// TODO  should we check inf connector actually exists to indicate it is not found
 	err = os.RemoveAll(types.ConnPath + name)
 	if err != nil {
-		log.Println("Failed to remove connector file contents", err.Error())
+		return fmt.Errorf("Failed to remove connector file contents: %w", err)
 	}
 
 	err = docker.RestartTransportContainer(cli.DockerInterface)
 	if err != nil {
-		log.Println("Failed to restart transport container", err.Error())
+		return fmt.Errorf("Failed to restart transport container: %w", err)
 	}
 
 	err = docker.RestartControllerContainer(cli.DockerInterface)
 	if err != nil {
-	    log.Println("Failed to restart controller container", err.Error())
+		return fmt.Errorf("Failed to restart controller container: %w", err)
 	}
 
-	return err
+	return nil
 }

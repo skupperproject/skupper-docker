@@ -1,7 +1,7 @@
 package client
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/skupperproject/skupper-cli/pkg/certs"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
@@ -13,19 +13,16 @@ func (cli *VanClient) VanConnectorTokenCreate(subject string, secretFile string)
 	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
 		// TODO: is not found versus error
-		log.Println("Unable to retrieve transport container (need init?)", err.Error())
-		return err
+		return fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
 	if !qdr.IsInterior(current) {
-		log.Println("Edge mode transport configuration cannot accept connections")
-		return nil
+		return fmt.Errorf("Edge mode transport configuration cannot accept connections")
 	}
 
 	caData, err := getCertData("skupper-internal-ca")
 	if err != nil {
-		log.Println("Unable to retrieve CA data", err.Error())
-		return nil
+		return fmt.Errorf("Unable to retrieve CA data: %w", err)
 	}
 
 	ipAddr := string(current.NetworkSettings.Networks["skupper-network"].IPAddress)
@@ -33,6 +30,7 @@ func (cli *VanClient) VanConnectorTokenCreate(subject string, secretFile string)
 	annotations["inter-router-port"] = "55671"
 	annotations["inter-router-host"] = ipAddr
 
+	// TODO err return from certs pkg
 	certData := certs.GenerateCertificateData(subject, subject, ipAddr, caData)
 	certs.PutCertificateData(subject, secretFile, certData, annotations)
 

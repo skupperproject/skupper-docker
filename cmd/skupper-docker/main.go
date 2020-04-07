@@ -77,7 +77,10 @@ func main() {
 		Args:  requiredArg("output-file"),
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
-			cli.VanConnectorTokenCreate(clientIdentity, args[0])
+			err := cli.VanConnectorTokenCreate(clientIdentity, args[0])
+			if err != nil {
+				fmt.Println("Unable to generate connection-token: ", err.Error())
+			}
 		},
 	}
 	cmdConnectionToken.Flags().StringVarP(&clientIdentity, "client-identity", "i", "skupper", "Provide a specific identity as which connecting skupper installation will be authenticated")
@@ -89,7 +92,10 @@ func main() {
 		Args:  requiredArg("connection-token"),
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
-			cli.VanConnectorCreate(args[0], vanConnectorCreateOpts)
+			err := cli.VanConnectorCreate(args[0], vanConnectorCreateOpts)
+			if err != nil {
+				fmt.Println("Unable to connect to skupper installation: ", err.Error())
+			}
 		},
 	}
 	cmdConnect.Flags().StringVarP(&vanConnectorCreateOpts.Name, "connection-name", "", "", "Provide a specific name for the connection (used when removing it with disconnect)")
@@ -101,7 +107,10 @@ func main() {
 		Args:  requiredArg("connection name"),
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
-			cli.VanConnectorRemove(args[0])
+			err := cli.VanConnectorRemove(args[0])
+			if err != nil {
+				fmt.Println("Unable to disconnect from skupper installation: ", err.Error())
+			}
 		},
 	}
 
@@ -148,6 +157,9 @@ func main() {
 							Connected: false,
 						})
 					}
+				} else {
+					fmt.Println("Unable to retrieve all connector list:", err.Error())
+					return
 				}
 			} else {
 				vci, err := cli.VanConnectorInspect(args[0])
@@ -156,6 +168,9 @@ func main() {
 					if vci.Connected {
 						connected++
 					}
+				} else {
+					fmt.Printf("Unable to inspect connector %s: %s", args[0], err.Error())
+					return
 				}
 			}
 
@@ -231,7 +246,6 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
 			err := cli.VanServiceInterfaceCreate(args[0], vanServiceInterfaceCreateOpts)
-
 			if err == nil {
 				fmt.Printf("VAN Service Interface Target %s exposed\n", args[0])
 			} else {

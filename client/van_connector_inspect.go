@@ -1,8 +1,8 @@
 package client
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
@@ -22,13 +22,11 @@ func getConnector(name string, mode types.TransportMode) (*types.Connector, erro
 	}
 	host, err := ioutil.ReadFile(types.ConnPath + name + suffix + "host")
 	if err != nil {
-		log.Fatal("Could not retrieve connection-token files: ", err.Error())
-		return &types.Connector{}, err
+		return &types.Connector{}, fmt.Errorf("Could not retrieve connection-token files: %w", err)
 	}
 	port, err := ioutil.ReadFile(types.ConnPath + name + suffix + "port")
 	if err != nil {
-		log.Fatal("Could not retrieve connection-token files: ", err.Error())
-		return &types.Connector{}, err
+		return &types.Connector{}, fmt.Errorf("Could not retrieve connection-token files: %w", err)
 	}
 	connector := &types.Connector{
 		Name: name,
@@ -46,14 +44,13 @@ func (cli *VanClient) VanConnectorInspect(name string) (*types.VanConnectorInspe
 	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
 		// TODO: is not found versus error
-		log.Println("Unable to retrieve transport container (need init?)", err.Error())
-		return vci, err
+		return vci, fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
 	mode := qdr.GetTransportMode(current)
 	connector, err := getConnector(name, mode)
 	if err != nil {
-		log.Println("Unable to get connector", err.Error())
+		return vci, fmt.Errorf("Unable to get connector: %w", err)
 	} else {
 		vci.Connector = connector
 	}
@@ -67,6 +64,8 @@ func (cli *VanClient) VanConnectorInspect(name string) (*types.VanConnectorInspe
 		} else {
 			vci.Connected = true
 		}
+		return vci, nil
+	} else {
+		return vci, fmt.Errorf("Unable to get connections from transport: %w", err)
 	}
-	return vci, nil
 }

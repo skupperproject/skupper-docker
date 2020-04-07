@@ -1,8 +1,8 @@
 package client
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/skupperproject/skupper-docker/api/types"
@@ -15,21 +15,19 @@ func (cli *VanClient) VanServiceInterfaceRemove(address string) error {
 
 	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
-		log.Println("Failed to retrieve transport container ", err.Error())
-		return err
+		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
 	// check that a service with that name already has been attached to the VAN
 	_, err = ioutil.ReadFile(types.ServicePath + address)
 	if err != nil {
-		log.Println("Service interface for address does not exist", address)
-		return err
+		return fmt.Errorf("Failed to retrieve service interface: %w", err)
 	}
 
 	err = os.Remove(types.ServicePath + address)
 	if err != nil {
-		log.Println("Failed to remove service interface file", err.Error())
+		return fmt.Errorf("Failed to remove service interface file: %w", err)
 	}
 
-	return err
+	return nil
 }

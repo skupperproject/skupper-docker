@@ -1,8 +1,8 @@
 package client
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strconv"
 
@@ -30,48 +30,49 @@ func getCertData(name string) (certs.CertificateData, error) {
 			if err == nil {
 				certData[f.Name()] = []byte(dataString)
 			} else {
-				log.Fatal("Failed to read certificat data: ", err.Error())
+				return certData, fmt.Errorf("Failed to read certificat data: %w", err)
 			}
 		}
 	}
 	return certData, err
 }
 
-func generateCredentials(ca string, name string, subject string, hosts string, includeConnectJson bool) {
+func generateCredentials(ca string, name string, subject string, hosts string, includeConnectJson bool) error {
 	caData, _ := getCertData(ca)
 	certData := certs.GenerateCertificateData(name, subject, hosts, caData)
 
 	for k, v := range certData {
 		if err := ioutil.WriteFile(types.CertPath+name+"/"+k, v, 0755); err != nil {
-			log.Fatal("Failed to write certificate file: ", err.Error())
+			return fmt.Errorf("Failed to write certificate file: %w", err)
 		}
 	}
 
 	if includeConnectJson {
 		certData["connect.json"] = []byte(configs.ConnectJson())
 		if err := ioutil.WriteFile(types.CertPath+name+"/connect.json", []byte(configs.ConnectJson()), 0755); err != nil {
-			log.Fatal("Failed to write connect file: ", err.Error())
+			return fmt.Errorf("Failed to write connect file: %w", err)
 		}
 	}
 
+	return nil
 }
 
-func ensureCA(name string) certs.CertificateData {
+func ensureCA(name string) (certs.CertificateData, error) {
 
 	// check if existing by looking at path/dir, if not create dir to persist
 	caData := certs.GenerateCACertificateData(name, name)
 
 	if err := os.Mkdir(types.CertPath+name, 0755); err != nil {
-		log.Fatal("Failed to create certificate directory: ", err.Error())
+		return nil, fmt.Errorf("Failed to create certificate directory: %w", err)
 	}
 
 	for k, v := range caData {
 		if err := ioutil.WriteFile(types.CertPath+name+"/"+k, v, 0755); err != nil {
-			log.Fatal("Failed to write CA certificate file: ", err.Error())
+			return nil, fmt.Errorf("Failed to write CA certificate file: %w", err.Error())
 		}
 	}
 
-	return caData
+	return caData, nil
 }
 
 func GetVanRouterSpecFromOpts(options types.VanRouterCreateOptions, client *VanClient) (*types.VanRouterSpec, error) {
@@ -289,13 +290,15 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 			}
 		} else {
 			if options.User != "" {
-				log.Println("--router-console-user only valid when --router-console-auth=internal")
+				return fmt.Errorf("--router-console-user only valid when --router-console-auth=internal")
 			}
 			if options.Password != "" {
-				log.Println("--router-console-password only valid when --router-console-auth=internal")
+				return fmt.Errorf("--router-console-password only valid when --router-console-auth=internal")
 			}
 		}
 	}
+
+	// TODO check if resources already exist: either delete them all or error out
 
 	van, err := GetVanRouterSpecFromOpts(options, cli)
 	if err != nil {
@@ -356,7 +359,7 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 	//TODO : generate certs first?
 	err = docker.StartContainer(transport.Name, cli.DockerInterface)
 	if err != nil {
-		log.Println("Could not start transport container", err)
+		return fmt.Errorf("Could not start transport container: %w", err)
 	}
 
 	controller, err := docker.NewControllerContainer(van, cli.DockerInterface)
@@ -366,7 +369,7 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 
 	err = docker.StartContainer(controller.Name, cli.DockerInterface)
 	if err != nil {
-		log.Println("Could not start controller container", err)
+		return fmt.Errorf("Could not start controller container: %w", err)
 	}
 
 	return nil
