@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/skupperproject/skupper-docker/api/types"
-	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
+	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 )
 
 type RouterNode struct {

@@ -3,11 +3,7 @@ package client
 import (
 	"time"
 
-	//	dockerapi "github.com/docker/docker/client"
-	//  	"golang.org/x/net/context"
-
-	//"github.com/skupperproject/skupper-docker/api/types"
-	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
+	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 )
 
 // A VAN client manages orchestration and communication with the network components

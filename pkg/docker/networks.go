@@ -5,7 +5,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 
-	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
+	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 )
 
 func RemoveNetwork(name string, dd libdocker.Interface) error {

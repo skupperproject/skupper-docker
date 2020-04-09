@@ -116,8 +116,7 @@ type VanRouterSpec struct {
 
 // DeploymentSpec for the VAN router or controller components to run within a cluster
 type DeploymentSpec struct {
-	Image string `json:"image,omitempty"`
-	//	Replicas        int32                  `json:"replicas,omitempty"`
+	Image        string            `json:"image,omitempty"`
 	LivenessPort int32             `json:"livenessPort,omitempty"`
 	Labels       map[string]string `json:"labels,omitempty"`
 	//	Annotations     map[string]string      `json:"annotations,omitempty"`
@@ -125,13 +124,6 @@ type DeploymentSpec struct {
 	Ports   nat.PortSet       `json:"ports,omitempty"`
 	Volumes []string          `json:"volumes,omitempty"`
 	Mounts  map[string]string `json:"mounts,omitempty"`
-	//	Volumes         []corev1.Volume        `json:"volumes,omitempty"`
-	//	VolumeMounts    []corev1.VolumeMount   `json:"volumeMounts,omitempty"`
-	//	ConfigMaps      []ConfigMap            `json:"configMaps,omitempty"`
-	//	Roles           []Role                 `json:"roles,omitempty"`
-	//	RoleBindings    []RoleBinding          `json:"roleBinding,omitempty"`
-	//	ServiceAccounts []ServiceAccount       `json:"serviceAccounts,omitempty"`
-	//	Services        []Service              `json:"services,omitempty"`
 }
 
 // AssemblySpec for the links and connectors that form the VAN topology
@@ -145,7 +137,6 @@ type AssemblySpec struct {
 	Connectors            []Connector  `json:"connectors,omitempty"`
 	InterRouterConnectors []Connector  `json:"interRouterConnectors,omitempty"`
 	EdgeConnectors        []Connector  `json:"edgeConnectors,omitempty"`
-	//	Routes                []Route      `json:"routes,omitempty"`
 }
 
 type Listener struct {

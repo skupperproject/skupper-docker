@@ -22,8 +22,8 @@ import (
 	dockernetworktypes "github.com/docker/docker/api/types/network"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
-	skupperservice "github.com/skupperproject/skupper-docker/pkg/service"
+	"github.com/skupperproject/skupper-docker/api/types"
+	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 )
 
 const (
@@ -39,12 +39,12 @@ var (
 
 type ServiceSyncUpdate struct {
 	origin  string
-	indexed map[string]skupperservice.Service
+	indexed map[string]types.ServiceInterface
 }
 
 func NewServiceSyncUpdate() *ServiceSyncUpdate {
 	var ssu ServiceSyncUpdate
-	ssu.indexed = make(map[string]skupperservice.Service)
+	ssu.indexed = make(map[string]types.ServiceInterface)
 	return &ssu
 }
 
@@ -89,7 +89,7 @@ func authOption(username string, password string) amqp.ConnOption {
 	}
 }
 
-func reconcileService(origin string, service skupperservice.Service) {
+func reconcileService(origin string, service types.ServiceInterface) {
 	var update = true
 
 	dd := libdocker.ConnectToDockerOrDie("", 0, 10*time.Second)
@@ -151,9 +151,9 @@ func ensureDefinitions(svcDefs *ServiceSyncUpdate) {
 	}
 }
 
-func getOriginServices(origin string, dd libdocker.Interface) map[string]skupperservice.Service {
+func getOriginServices(origin string, dd libdocker.Interface) map[string]types.ServiceInterface {
 	// get list of proxy containers for origin
-	items := make(map[string]skupperservice.Service)
+	items := make(map[string]types.ServiceInterface)
 
 	filters := dockerfilters.NewArgs()
 	filters.Add("label", "skupper.io/application")
@@ -170,7 +170,7 @@ func getOriginServices(origin string, dd libdocker.Interface) map[string]skupper
 
 	for _, container := range containers {
 		if value, ok := container.Labels["skupper.io/origin"]; ok {
-			svc := skupperservice.Service{}
+			svc := types.ServiceInterface{}
 			if value == origin {
 				last := container.Labels["skupper.io/last-applied"]
 				err := json.Unmarshal([]byte(last), &svc)
@@ -185,9 +185,9 @@ func getOriginServices(origin string, dd libdocker.Interface) map[string]skupper
 	return items
 }
 
-func getRemoteServices(dd libdocker.Interface) map[string]skupperservice.Service {
+func getRemoteServices(dd libdocker.Interface) map[string]types.ServiceInterface {
 	// get list of non-locally originated proxy containers
-	items := make(map[string]skupperservice.Service)
+	items := make(map[string]types.ServiceInterface)
 
 	localOrigin := os.Getenv("SKUPPER_SERVICE_SYNC_ORIGIN")
 
@@ -206,7 +206,7 @@ func getRemoteServices(dd libdocker.Interface) map[string]skupperservice.Service
 
 	for _, container := range containers {
 		if value, ok := container.Labels["skupper.io/origin"]; ok {
-			svc := skupperservice.Service{}
+			svc := types.ServiceInterface{}
 			if value != localOrigin {
 				last := container.Labels["skupper.io/last-applied"]
 				err := json.Unmarshal([]byte(last), &svc)
@@ -221,13 +221,13 @@ func getRemoteServices(dd libdocker.Interface) map[string]skupperservice.Service
 	return items
 }
 
-func getLocalServices() map[string]skupperservice.Service {
-	items := make(map[string]skupperservice.Service)
+func getLocalServices() map[string]types.ServiceInterface {
+	items := make(map[string]types.ServiceInterface)
 
 	files, err := ioutil.ReadDir("/etc/messaging/services")
 	if err == nil {
 		for _, file := range files {
-			svc := skupperservice.Service{}
+			svc := types.ServiceInterface{}
 			data, err := ioutil.ReadFile("/etc/messaging/services/" + file.Name())
 			if err == nil {
 				err = json.Unmarshal(data, &svc)
@@ -249,10 +249,14 @@ func getLocalServices() map[string]skupperservice.Service {
 	return items
 }
 
-func getLabels(origin string, service skupperservice.Service, isLocal bool) map[string]string {
+func getLabels(origin string, service types.ServiceInterface, isLocal bool) map[string]string {
 	target := ""
+	targetType := "container"
 	if isLocal {
 		target = service.Targets[0].Name
+		if service.Targets[0].Selector == "internal.skupper.io/hostservice" {
+			targetType = "host"
+		}
 	}
 
 	lastApplied, err := json.Marshal(service)
@@ -264,13 +268,14 @@ func getLabels(origin string, service skupperservice.Service, isLocal bool) map[
 		"skupper.io/application":  "skupper-proxy",
 		"skupper.io/address":      service.Address,
 		"skupper.io/target":       target,
+		"skupper.io/targetType":   targetType,
 		"skupper.io/component":    "proxy",
 		"skupper.io/origin":       origin,
 		"skupper.io/last-applied": string(lastApplied),
 	}
 }
 
-func deploy(origin string, service skupperservice.Service, dd libdocker.Interface) {
+func deploy(origin string, service types.ServiceInterface, dd libdocker.Interface) {
 	isLocal := true
 	myOrigin := os.Getenv("SKUPPER_SERVICE_SYNC_ORIGIN")
 	if origin != myOrigin {
@@ -288,8 +293,10 @@ func deploy(origin string, service skupperservice.Service, dd libdocker.Interfac
 		log.Fatal("Failed to pull proxy image: ", err.Error())
 	}
 
-	// attach local target to the skupper network
-	if isLocal {
+	hostService := service.Targets[0].Selector == "internal.skupper.io/hostservice"
+
+	// attach target container to the skupper network
+	if isLocal && !hostService {
 		//	if service.Targets[0].Name != "" {
 		err := dd.ConnectContainerToNetwork("skupper-network", service.Targets[0].Name)
 		if err != nil {
@@ -360,7 +367,7 @@ func undeploy(name string, dd libdocker.Interface) {
 }
 
 func deployLocalService(name string) {
-	var svc skupperservice.Service
+	var svc types.ServiceInterface
 
 	origin := os.Getenv("SKUPPER_SERVICE_SYNC_ORIGIN")
 
@@ -396,9 +403,13 @@ func undeployLocalService(address string) {
 	} else {
 		if target, ok := existing.Config.Labels["skupper.io/target"]; ok {
 			if target != "" {
-				err := dd.DisconnectContainerFromNetwork("skupper-network", target, true)
-				if err != nil {
-					log.Fatal("Failed to detatch target container from skupper network: ", err.Error())
+				if targetType, ok := existing.Config.Labels["skupper.io/targetType"]; ok {
+					if targetType == "container" {
+						err := dd.DisconnectContainerFromNetwork("skupper-network", target, true)
+						if err != nil {
+							log.Fatal("Failed to detatch target container from skupper network: ", err.Error())
+						}
+					}
 				}
 			}
 		}
@@ -436,7 +447,7 @@ func syncSender(s *amqp.Session, sendLocal chan bool) {
 		case <-sendLocal:
 			properties.Subject = "service-sync-update"
 			svcDefsMap := getLocalServices()
-			svcDefs := []skupperservice.Service{}
+			svcDefs := []types.ServiceInterface{}
 			if len(svcDefsMap) > 0 {
 				for _, svc := range svcDefsMap {
 					svc.Targets = nil
@@ -556,7 +567,7 @@ func main() {
 			if svcSyncUpdate.origin, ok = msg.ApplicationProperties["origin"].(string); ok {
 				if svcSyncUpdate.origin != localOrigin {
 					if updates, ok := msg.Value.(string); ok {
-						defs := []skupperservice.Service{}
+						defs := []types.ServiceInterface{}
 						err := json.Unmarshal([]byte(updates), &defs)
 						if err == nil {
 							for _, def := range defs {

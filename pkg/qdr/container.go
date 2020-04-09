@@ -19,7 +19,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockerstdcopy "github.com/docker/docker/pkg/stdcopy"
-	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
+	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 )
 
 // TODO: rethink where this should be placed in pkg dir

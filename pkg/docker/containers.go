@@ -13,7 +13,7 @@ import (
 	dockernetworktypes "github.com/docker/docker/api/types/network"
 
 	"github.com/skupperproject/skupper-docker/api/types"
-	"github.com/skupperproject/skupper-docker/pkg/dockershim/libdocker"
+	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 	"github.com/skupperproject/skupper-docker/pkg/utils/configs"
 )
 

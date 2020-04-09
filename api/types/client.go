@@ -26,6 +26,10 @@ type VanServiceInterfaceCreateOptions struct {
 	Headless   bool
 }
 
+type VanServiceInterfaceRemoveOptions struct {
+	Address string
+}
+
 type VanRouterInspectResponse struct {
 	Status            VanRouterStatusSpec
 	TransportVersion  string

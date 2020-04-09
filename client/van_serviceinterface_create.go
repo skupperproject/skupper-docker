@@ -7,9 +7,10 @@ import (
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
+	"github.com/skupperproject/skupper-docker/pkg/utils"
 )
 
-func (cli *VanClient) VanServiceInterfaceCreate(targetName string, options types.VanServiceInterfaceCreateOptions) error {
+func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName string, options types.VanServiceInterfaceCreateOptions) error {
 
 	// TODO: check that all options are present
 	// TODO: don't expose same container twice
@@ -26,39 +27,77 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetName string, options types
 		return fmt.Errorf("Expose target name %s already exists\n", targetName)
 	}
 
-	if targetName == options.Address {
-		return fmt.Errorf("the exposed address and container target name must be different")
-	}
+	if targetType == "container" {
+		if targetName == options.Address {
+			return fmt.Errorf("the exposed address and container target name must be different")
+		}
 
-	_, err = docker.InspectContainer(targetName, cli.DockerInterface)
-	if err != nil {
-		// TODO: handle exited, not running, is not found etc.
-		return fmt.Errorf("Error retrieving service target container: %w", err)
-	}
+		_, err = docker.InspectContainer(targetName, cli.DockerInterface)
+		if err != nil {
+			// TODO: handle exited, not running, is not found etc.
+			return fmt.Errorf("Error retrieving service target container: %w", err)
+		}
 
-	serviceInterfaceTarget := types.ServiceInterfaceTarget{
-		Name:       targetName,
-		Selector:   "",
-		TargetPort: options.TargetPort,
-	}
+		serviceInterfaceTarget := types.ServiceInterfaceTarget{
+			Name:       targetName,
+			Selector:   "",
+			TargetPort: options.TargetPort,
+		}
 
-	serviceInterface := types.ServiceInterface{
-		Address:  options.Address,
-		Protocol: options.Protocol,
-		Port:     options.Port,
-		Targets: []types.ServiceInterfaceTarget{
-			serviceInterfaceTarget,
-		},
-	}
+		serviceInterface := types.ServiceInterface{
+			Address:  options.Address,
+			Protocol: options.Protocol,
+			Port:     options.Port,
+			Targets: []types.ServiceInterfaceTarget{
+				serviceInterfaceTarget,
+			},
+		}
 
-	encoded, err := json.Marshal(serviceInterface)
-	if err != nil {
-		return fmt.Errorf("Failed to create json for service interface: %w", err)
-	}
+		encoded, err := json.Marshal(serviceInterface)
+		if err != nil {
+			return fmt.Errorf("Failed to create json for service interface: %w", err)
+		}
 
-	err = ioutil.WriteFile(types.ServicePath+options.Address, encoded, 0755)
-	if err != nil {
-		return fmt.Errorf("Failed to write service interface file: %w", err)
+		err = ioutil.WriteFile(types.ServicePath+options.Address, encoded, 0755)
+		if err != nil {
+			return fmt.Errorf("Failed to write service interface file: %w", err)
+		}
+	} else if targetType == "host" {
+		if options.Port == 0 {
+			return fmt.Errorf("Host service must specify port, use --port option to provide it")
+		}
+		hostIP := utils.GetInternalIP(targetName)
+		if hostIP == "" {
+			return fmt.Errorf("Error retrieving host target network address")
+		}
+
+		serviceInterfaceTarget := types.ServiceInterfaceTarget{
+			Name:       hostIP,
+			Selector:   "internal.skupper.io/hostservice",
+			TargetPort: options.TargetPort,
+		}
+
+		serviceInterface := types.ServiceInterface{
+			Address:  options.Address,
+			Protocol: options.Protocol,
+			Port:     options.Port,
+			Targets: []types.ServiceInterfaceTarget{
+				serviceInterfaceTarget,
+			},
+		}
+		fmt.Println("Add service interface", serviceInterface)
+		encoded, err := json.Marshal(serviceInterface)
+		if err != nil {
+			return fmt.Errorf("Failed to create json for service interface: %w", err)
+		}
+
+		err = ioutil.WriteFile(types.ServicePath+options.Address, encoded, 0755)
+		if err != nil {
+			return fmt.Errorf("Failed to write service interface file: %w", err)
+		}
+
+	} else {
+		return fmt.Errorf("Expose target type %s not supported", targetType)
 	}
 
 	return nil

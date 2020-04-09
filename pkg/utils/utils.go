@@ -16,6 +16,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"net"
 )
 
 const alphanumerics = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -28,4 +29,25 @@ func RandomId(length int) string {
 		buffer[i] = alphanumerics[int(buffer[i])%max]
 	}
 	return string(buffer)
+}
+
+func GetInternalIP(iface string) string {
+	itf, _ := net.InterfaceByName(iface)
+	item, _ := itf.Addrs()
+	var ip net.IP
+	for _, addr := range item {
+		switch v := addr.(type) {
+		case *net.IPNet:
+			if !v.IP.IsLoopback() {
+				if v.IP.To4() != nil { //Verify if IP is IPV4
+					ip = v.IP
+				}
+			}
+		}
+	}
+	if ip != nil {
+		return ip.String()
+	} else {
+		return ""
+	}
 }
