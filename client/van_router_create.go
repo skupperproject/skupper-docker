@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -333,6 +334,21 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 	}
 	// this one is needed by the controller
 	if err := os.Mkdir(types.ServicePath, 0755); err != nil {
+		return err
+	}
+
+	// create skupper-services file
+	svcDefs := make(map[string]types.ServiceInterface)
+	encoded, err := json.Marshal(svcDefs)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(types.LocalSifs, encoded, 0755)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(types.AllSifs, encoded, 0755)
+	if err != nil {
 		return err
 	}
 

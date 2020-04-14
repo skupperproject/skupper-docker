@@ -60,7 +60,7 @@ const (
 	ControllerComponentName  string = "controller"
 	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller"
 	ControllerContainerName  string = "proxy-controller"
-	DefaultProxyImage        string = "quay.io/skupper/proxy"
+	DefaultProxyImage        string = "quay.io/skupper/icproxy-simple"
 	ControllerConfigPath     string = "/etc/messaging/"
 )
 
@@ -94,9 +94,11 @@ const (
 	InterRouterProfile      string = "skupper-internal"
 )
 
-// Service Sync constants
+// Service Interface constants
 const (
 	ServiceSyncAddress = "mc/$skupper-service-sync"
+	LocalSifs          = ServicePath + "local-skupper-services"
+	AllSifs            = ServicePath + "all-skupper-services"
 )
 
 // TODO: what is possiblity of using types from skupper itself (e.g. no namespace for docker

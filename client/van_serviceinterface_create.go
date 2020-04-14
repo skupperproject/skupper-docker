@@ -11,6 +11,7 @@ import (
 )
 
 func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName string, options types.VanServiceInterfaceCreateOptions) error {
+	svcDefs := make(map[string]types.ServiceInterface)
 
 	// TODO: check that all options are present
 	// TODO: don't expose same container twice
@@ -20,9 +21,16 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName st
 		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	// check that a service with that name already has been attached to the VAN
-	_, err = ioutil.ReadFile(types.ServicePath + options.Address)
-	if err == nil {
+	svcFile, err := ioutil.ReadFile(types.LocalSifs)
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve skupper service interace definitions: %w", err)
+	}
+	err = json.Unmarshal([]byte(svcFile), &svcDefs)
+	if err != nil {
+		return fmt.Errorf("Failed to decode json for service interface definitions: %w", err)
+	}
+
+	if _, ok := svcDefs[options.Address]; ok {
 		// TODO: Deal with update case , read in json file, decode and update
 		return fmt.Errorf("Expose target name %s already exists\n", targetName)
 	}
@@ -53,12 +61,14 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName st
 			},
 		}
 
-		encoded, err := json.Marshal(serviceInterface)
+		svcDefs[options.Address] = serviceInterface
+
+		encoded, err := json.Marshal(svcDefs)
 		if err != nil {
-			return fmt.Errorf("Failed to create json for service interface: %w", err)
+			return fmt.Errorf("Failed to encode json for service interface: %w", err)
 		}
 
-		err = ioutil.WriteFile(types.ServicePath+options.Address, encoded, 0755)
+		err = ioutil.WriteFile(types.LocalSifs, encoded, 0755)
 		if err != nil {
 			return fmt.Errorf("Failed to write service interface file: %w", err)
 		}
@@ -85,13 +95,15 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName st
 				serviceInterfaceTarget,
 			},
 		}
-		fmt.Println("Add service interface", serviceInterface)
-		encoded, err := json.Marshal(serviceInterface)
+
+		svcDefs[options.Address] = serviceInterface
+
+		encoded, err := json.Marshal(svcDefs)
 		if err != nil {
-			return fmt.Errorf("Failed to create json for service interface: %w", err)
+			return fmt.Errorf("Failed to encode json for service interface: %w", err)
 		}
 
-		err = ioutil.WriteFile(types.ServicePath+options.Address, encoded, 0755)
+		err = ioutil.WriteFile(types.LocalSifs, encoded, 0755)
 		if err != nil {
 			return fmt.Errorf("Failed to write service interface file: %w", err)
 		}

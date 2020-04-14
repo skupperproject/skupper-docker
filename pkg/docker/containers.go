@@ -1,9 +1,11 @@
 package docker
 
 import (
-	//    "os"
+	"encoding/json"
 	"io/ioutil"
 	"log"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +32,10 @@ func ListContainers(opts dockertypes.ContainerListOptions, dd libdocker.Interfac
 	return dd.ListContainers(opts)
 }
 
+func ConnectContainerToNetwork(network string, name string, dd libdocker.Interface) error {
+	return dd.ConnectContainerToNetwork(network, name)
+}
+
 func RestartContainer(name string, dd libdocker.Interface) error {
 	return dd.RestartContainer(name, 10*time.Second)
 }
@@ -46,79 +52,91 @@ func StartContainer(name string, dd libdocker.Interface) error {
 	return dd.StartContainer(name)
 }
 
-func getControllerContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.ContainerCreateConfig {
-	mounts := []dockermounttypes.Mount{}
-	for source, target := range van.Controller.Mounts {
-		mounts = append(mounts, dockermounttypes.Mount{
-			Type:   dockermounttypes.TypeBind,
-			Source: source,
-			Target: target,
-		})
+// TODO: should skupper containers be here or in another package?
+
+func getLabels(service types.ServiceInterface, isLocal bool) map[string]string {
+	target := ""
+	targetType := "container"
+	if isLocal {
+		target = service.Targets[0].Name
+		if service.Targets[0].Selector == "internal.skupper.io/hostservice" {
+			targetType = "host"
+		}
+	}
+
+	lastApplied, err := json.Marshal(service)
+	if err != nil {
+		log.Println("Failed to created json for proxy labels: ", err.Error())
+	}
+
+	return map[string]string{
+		"skupper.io/application":  "skupper-proxy",
+		"skupper.io/address":      service.Address,
+		"skupper.io/target":       target,
+		"skupper.io/targetType":   targetType,
+		"skupper.io/component":    "proxy",
+		"skupper.io/origin":       service.Origin,
+		"skupper.io/last-applied": string(lastApplied),
+	}
+}
+
+func getProxyContainerCreateConfig(service types.ServiceInterface, isLocal bool) *dockertypes.ContainerCreateConfig {
+	var imageName string
+	if os.Getenv("PROXY_IMAGE") != "" {
+		imageName = os.Getenv("PROXY_IMAGE")
+	} else {
+		imageName = types.DefaultProxyImage
+	}
+
+	labels := getLabels(service, isLocal)
+	bridges := []string{}
+	env := []string{}
+
+	bridges = append(bridges, service.Protocol+":"+strconv.Itoa(int(service.Port))+"=>amqp:"+service.Address)
+	if isLocal {
+		bridges = append(bridges, "amqp:"+service.Address+"=>"+service.Protocol+":"+strconv.Itoa(int(service.Targets[0].TargetPort)))
+		env = append(env, "ICPROXY_BRIDGE_HOST="+service.Targets[0].Name)
+	}
+	bridgeCfg := strings.Join(bridges, ",")
+
+	containerCfg := &dockercontainer.Config{
+		Hostname: service.Address,
+		Image:    imageName,
+		Cmd: []string{
+			"node",
+			"/opt/app-root/bin/simple.js",
+			bridgeCfg},
+		Env:    env,
+		Labels: labels,
+	}
+	hostCfg := &dockercontainer.HostConfig{
+		Mounts: []dockermounttypes.Mount{
+			{
+				Type:   dockermounttypes.TypeBind,
+				Source: types.CertPath + "skupper",
+				Target: "/etc/messaging",
+			},
+		},
+		Privileged: true,
+	}
+	networkCfg := &dockernetworktypes.NetworkingConfig{
+		EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
+			"skupper-network": {},
+		},
 	}
 
 	opts := &dockertypes.ContainerCreateConfig{
-		Name: types.ControllerDeploymentName,
-		Config: &dockercontainer.Config{
-			Hostname: types.ControllerDeploymentName,
-			Image:    van.Controller.Image,
-			Cmd:      []string{"/go/src/app/controller"},
-			Env:      van.Controller.EnvVar,
-			Labels:   van.Controller.Labels,
-		},
-		HostConfig: &dockercontainer.HostConfig{
-			Mounts:     mounts,
-			Privileged: true,
-		},
-		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
-			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-				"skupper-network": {},
-			},
-		},
+		Name:             service.Address,
+		Config:           containerCfg,
+		HostConfig:       hostCfg,
+		NetworkingConfig: networkCfg,
 	}
 
 	return opts
 }
 
-func getTransportContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.ContainerCreateConfig {
-	mounts := []dockermounttypes.Mount{}
-	for source, target := range van.Transport.Mounts {
-		mounts = append(mounts, dockermounttypes.Mount{
-			Type:   dockermounttypes.TypeBind,
-			Source: source,
-			Target: target,
-		})
-	}
-
-	opts := &dockertypes.ContainerCreateConfig{
-		Name: types.TransportDeploymentName,
-		Config: &dockercontainer.Config{
-			Hostname: types.TransportDeploymentName,
-			Image:    van.Transport.Image,
-			Env:      van.Transport.EnvVar,
-			Healthcheck: &dockercontainer.HealthConfig{
-				Test:        []string{"curl --fail -s http://localhost:9090/healthz || exit 1"},
-				StartPeriod: time.Duration(60),
-			},
-			Labels:       van.Transport.Labels,
-			ExposedPorts: van.Transport.Ports,
-		},
-		HostConfig: &dockercontainer.HostConfig{
-			Mounts:     mounts,
-			Privileged: true,
-		},
-		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
-			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-				"skupper-network": {},
-			},
-		},
-	}
-
-	return opts
-}
-
-// TODO: unify the two news
-func NewControllerContainer(van *types.VanRouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
-	opts := getControllerContainerCreateConfig(van)
+func NewProxyContainer(svcDef types.ServiceInterface, isLocal bool, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
+	opts := getProxyContainerCreateConfig(svcDef, isLocal)
 
 	// TODO: where should create and start be, here or in up a
 	_, err := dd.CreateContainer(*opts)
@@ -149,13 +167,15 @@ func RestartControllerContainer(dd libdocker.Interface) error {
 		Privileged: true,
 	}
 
+	newEnv := SetEnvVar(current.Config.Env, "SKUPPER_PROXY_CONTROLLER_RESTART", "true")
+
 	containerCfg := &dockercontainer.Config{
 		Hostname:     current.Config.Hostname,
 		Image:        current.Config.Image,
 		Cmd:          current.Config.Cmd,
 		Labels:       current.Config.Labels,
 		ExposedPorts: current.Config.ExposedPorts,
-		Env:          current.Config.Env,
+		Env:          newEnv,
 	}
 
 	// remove current and create new container
@@ -191,6 +211,53 @@ func RestartControllerContainer(dd libdocker.Interface) error {
 	}
 
 	return nil
+}
+
+func getControllerContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.ContainerCreateConfig {
+	mounts := []dockermounttypes.Mount{}
+	for source, target := range van.Controller.Mounts {
+		mounts = append(mounts, dockermounttypes.Mount{
+			Type:   dockermounttypes.TypeBind,
+			Source: source,
+			Target: target,
+		})
+	}
+
+	opts := &dockertypes.ContainerCreateConfig{
+		Name: types.ControllerDeploymentName,
+		Config: &dockercontainer.Config{
+			Hostname: types.ControllerDeploymentName,
+			Image:    van.Controller.Image,
+			Cmd:      []string{"/go/src/app/controller"},
+			Env:      van.Controller.EnvVar,
+			Labels:   van.Controller.Labels,
+		},
+		HostConfig: &dockercontainer.HostConfig{
+			Mounts:     mounts,
+			Privileged: true,
+		},
+		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
+			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
+				"skupper-network": {},
+			},
+		},
+	}
+
+	return opts
+}
+
+// TODO: unify the two news
+func NewControllerContainer(van *types.VanRouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
+	opts := getControllerContainerCreateConfig(van)
+
+	// TODO: where should create and start be, here or in up a
+	_, err := dd.CreateContainer(*opts)
+	if err != nil {
+		return nil, err
+	} else {
+		return opts, nil
+	}
+
 }
 
 func RestartTransportContainer(dd libdocker.Interface) error {
@@ -279,6 +346,43 @@ func RestartTransportContainer(dd libdocker.Interface) error {
 	}
 
 	return nil
+}
+
+func getTransportContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.ContainerCreateConfig {
+	mounts := []dockermounttypes.Mount{}
+	for source, target := range van.Transport.Mounts {
+		mounts = append(mounts, dockermounttypes.Mount{
+			Type:   dockermounttypes.TypeBind,
+			Source: source,
+			Target: target,
+		})
+	}
+
+	opts := &dockertypes.ContainerCreateConfig{
+		Name: types.TransportDeploymentName,
+		Config: &dockercontainer.Config{
+			Hostname: types.TransportDeploymentName,
+			Image:    van.Transport.Image,
+			Env:      van.Transport.EnvVar,
+			Healthcheck: &dockercontainer.HealthConfig{
+				Test:        []string{"curl --fail -s http://localhost:9090/healthz || exit 1"},
+				StartPeriod: time.Duration(60),
+			},
+			Labels:       van.Transport.Labels,
+			ExposedPorts: van.Transport.Ports,
+		},
+		HostConfig: &dockercontainer.HostConfig{
+			Mounts:     mounts,
+			Privileged: true,
+		},
+		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
+			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
+				"skupper-network": {},
+			},
+		},
+	}
+
+	return opts
 }
 
 func NewTransportContainer(van *types.VanRouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {

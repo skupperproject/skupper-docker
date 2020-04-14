@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 
 	"github.com/skupperproject/skupper-docker/api/types"
@@ -10,20 +11,22 @@ import (
 func (cli *VanClient) VanServiceInterfaceList() ([]*types.ServiceInterface, error) {
 	var vsis []*types.ServiceInterface
 
-	files, err := ioutil.ReadDir(types.ServicePath)
+	svcDefs := make(map[string]types.ServiceInterface)
+
+	svcFile, err := ioutil.ReadFile(types.AllSifs)
 	if err != nil {
 		return vsis, err
 	}
 
-	for _, f := range files {
-		encoded, _ := ioutil.ReadFile(types.ServicePath + f.Name())
-		si := types.ServiceInterface{}
-		err = json.Unmarshal([]byte(encoded), &si)
-		if err != nil {
-			return vsis, err
-		} else {
-			vsis = append(vsis, &si)
-		}
+	err = json.Unmarshal([]byte(svcFile), &svcDefs)
+	if err != nil {
+		return vsis, fmt.Errorf("Failed to decode json for service interface definitions: %w", err)
+	}
+	fmt.Println("Svc defs: ", svcDefs)
+
+	for _, v := range svcDefs {
+		fmt.Println("V:", v)
+		vsis = append(vsis, &v)
 	}
 
 	return vsis, err

@@ -88,7 +88,8 @@ func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanCon
 		return fmt.Errorf("Failed to re-start transport container: %w", err)
 	}
 
-	err = docker.RestartControllerContainer(cli.DockerInterface)
+	err = docker.RestartContainer("skupper-proxy-controller", cli.DockerInterface)
+	//	err = docker.RestartControllerContainer(cli.DockerInterface)
 	if err != nil {
 		return fmt.Errorf("Failed to re-start controller container: %w", err)
 	}
