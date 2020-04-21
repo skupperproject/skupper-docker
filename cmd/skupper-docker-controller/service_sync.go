@@ -12,6 +12,7 @@ import (
 
 	amqp "github.com/Azure/go-amqp"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/skupperproject/skupper-docker/api/types"
 )
 
@@ -48,7 +49,6 @@ func (c *Controller) serviceSyncDefinitionsUpdated(definitions map[string]types.
 	}
 
 	sort.Sort(types.ByServiceInterfaceAddress(latest))
-
 	last := make(map[string]types.ServiceInterface)
 	for _, def := range c.localServices {
 		last[def.Address] = def
@@ -69,7 +69,6 @@ func (c *Controller) serviceSyncDefinitionsUpdated(definitions map[string]types.
 			added = append(added, def)
 		}
 	}
-
 	c.localServices = latest
 	c.byName = byName
 }
@@ -88,7 +87,6 @@ func (c *Controller) ensureServiceInterfaceDefinitions(origin string, serviceInt
 
 	}
 
-	// TODO: think about aging entries
 	if _, ok := c.byOrigin[origin]; !ok {
 		c.byOrigin[origin] = make(map[string]types.ServiceInterface)
 	} else {
@@ -100,9 +98,8 @@ func (c *Controller) ensureServiceInterfaceDefinitions(origin string, serviceInt
 		}
 	}
 
-	// TODO: have a func to updateAllSkupperServices
 	if len(changed) > 0 || len(deleted) > 0 {
-		svcDefs, err := getServices("all")
+		svcDefs, err := getServiceDefinitions("all")
 		if err != nil {
 			log.Println("Failed to retrieve service definitions: ", err.Error())
 			return
@@ -112,13 +109,13 @@ func (c *Controller) ensureServiceInterfaceDefinitions(origin string, serviceInt
 		}
 		for _, name := range deleted {
 			delete(svcDefs, name)
+			delete(c.byOrigin[origin], name)
 		}
-		err = updateServices("all", svcDefs)
+		err = updateServiceDefinitions("all", svcDefs)
 		if err != nil {
 			log.Println("Failed to write all service interface file: ", err.Error())
 		}
 	}
-
 	return
 }
 
@@ -142,11 +139,10 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 	request.ApplicationProperties = make(map[string]interface{})
 	request.ApplicationProperties["origin"] = c.origin
 
-	// TODO: Have a function to getLocalSkupperServices, getAllSkupperServices
 	for {
 		select {
 		case <-ticker.C:
-			svcDefs, err := getServices("local")
+			svcDefs, err := getServiceDefinitions("local")
 			if err != nil {
 				log.Println("Failed to retrieve skupper service definitions: ", err.Error())
 				return
@@ -159,7 +155,6 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 					Port:     si.Port,
 					Targets:  []types.ServiceInterfaceTarget{},
 				}
-				//si.Targets = nil
 				local = append(local, service)
 			}
 			encoded, err := json.Marshal(local)
@@ -173,11 +168,10 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 	}
 }
 
-func (c *Controller) runServiceSync(syncUpdate chan *ServiceSyncUpdate) error {
+func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) error {
 	ctx := context.Background()
 
 	log.Println("Establishing connection to skupper transport service")
-
 	client, err := amqp.Dial("amqps://skupper-router:5671", amqp.ConnSASLAnonymous(), amqp.ConnMaxFrameSize(4294967295), amqp.ConnTLSConfig(c.tlsConfig))
 	if err != nil {
 		return fmt.Errorf("Failed to create amqp connection: %w", err)
@@ -249,4 +243,47 @@ func (c *Controller) runServiceSync(syncUpdate chan *ServiceSyncUpdate) error {
 		}
 	}
 	return nil
+}
+
+func (c *Controller) runServiceSyncLocalWatcher(syncUpdate chan *ServiceSyncUpdate) {
+	var watcher *fsnotify.Watcher
+
+	watcher, _ = fsnotify.NewWatcher()
+	defer watcher.Close()
+
+	err := watcher.Add("/etc/messaging/services/local/")
+	if err != nil {
+		log.Println("Could not add local services directory watcher", err.Error())
+		return
+	}
+
+	// process anything already present
+	c.processLocalServices()
+
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				svcDefs, err := getServiceDefinitions("local")
+				if err != nil {
+					log.Println("Failed to retreive service definitions:", err.Error())
+				}
+
+				indexed := make(map[string]types.ServiceInterface)
+				for _, def := range svcDefs {
+					def.Origin = c.origin
+					indexed[def.Address] = def
+				}
+				syncUpdate <- &ServiceSyncUpdate{
+					origin:  c.origin,
+					indexed: indexed,
+				}
+			} else {
+				return
+			}
+		}
+	}
 }

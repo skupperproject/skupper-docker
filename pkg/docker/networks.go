@@ -8,6 +8,10 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
 )
 
+func InspectNetwork(name string, dd libdocker.Interface) (dockertypes.NetworkResource, error) {
+	return dd.InspectNetwork(name)
+}
+
 func RemoveNetwork(name string, dd libdocker.Interface) error {
 	tnr, err := dd.InspectNetwork(name)
 	if err != nil {

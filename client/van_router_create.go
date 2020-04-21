@@ -336,6 +336,15 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 	if err := os.Mkdir(types.ServicePath, 0755); err != nil {
 		return err
 	}
+	if err := os.Mkdir(types.ServicePath+"local/", 0755); err != nil {
+		return err
+	}
+	if err := os.Mkdir(types.ServicePath+"all/", 0755); err != nil {
+		return err
+	}
+	//	if err := os.Mkdir(types.ServicePath, 0755); err != nil {
+	//		return err
+	//	}
 
 	// create skupper-services file
 	svcDefs := make(map[string]types.ServiceInterface)
@@ -343,17 +352,17 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(types.LocalSifs, encoded, 0755)
+	err = ioutil.WriteFile(types.LocalServiceDefsFile, encoded, 0755)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(types.AllSifs, encoded, 0755)
+	err = ioutil.WriteFile(types.AllServiceDefsFile, encoded, 0755)
 	if err != nil {
 		return err
 	}
 
 	// create user network
-	_, err = docker.NewTransportNetwork("skupper-network", cli.DockerInterface)
+	_, err = docker.NewTransportNetwork(types.TransportNetworkName, cli.DockerInterface)
 	if err != nil {
 		return err
 	}

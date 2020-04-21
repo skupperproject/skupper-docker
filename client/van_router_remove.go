@@ -14,16 +14,21 @@ import (
 //TODO should there be remove options
 
 // VanRouterRemove delete a VAN (transport and controller) deployment
-func (cli *VanClient) VanRouterRemove() error {
+func (cli *VanClient) VanRouterRemove() []error {
+	results := []error{}
 
-	// stop controller
-	err := docker.StopContainer(types.ControllerDeploymentName, cli.DockerInterface)
-	if err != nil {
-		return fmt.Errorf("Could not stop controller container: %w", err)
-	}
-	err = docker.RemoveContainer(types.ControllerDeploymentName, cli.DockerInterface)
-	if err != nil {
-		return fmt.Errorf("Could not remove controller container: %w", err)
+	_, err := docker.InspectContainer(types.ControllerDeploymentName, cli.DockerInterface)
+	if err == nil {
+		// stop controller
+		err = docker.StopContainer(types.ControllerDeploymentName, cli.DockerInterface)
+		if err != nil {
+			results = append(results, fmt.Errorf("Could not stop controller container: %w", err))
+		} else {
+			err = docker.RemoveContainer(types.ControllerDeploymentName, cli.DockerInterface)
+			if err != nil {
+				results = append(results, fmt.Errorf("Could not remove controller container: %w", err))
+			}
+		}
 	}
 
 	// remove proxies
@@ -34,46 +39,54 @@ func (cli *VanClient) VanRouterRemove() error {
 		All:     true,
 	}
 	containers, err := docker.ListContainers(opts, cli.DockerInterface)
-	if err != nil {
-		return fmt.Errorf("Failed to list proxy containers: %w", err)
-	} else {
+	if err == nil {
 		for _, container := range containers {
 			if value, ok := container.Labels["skupper.io/component"]; ok {
 				if value == "proxy" {
 					err := docker.StopContainer(container.ID, cli.DockerInterface)
 					if err != nil {
-						return fmt.Errorf("Failed to stop proxy container: %w", err)
-					}
-					err = docker.RemoveContainer(container.ID, cli.DockerInterface)
-					if err != nil {
-						return fmt.Errorf("Failed to remove proxy container: %w", err)
+						results = append(results, fmt.Errorf("Failed to stop proxy container: %w", err))
+					} else {
+						err = docker.RemoveContainer(container.ID, cli.DockerInterface)
+						if err != nil {
+							results = append(results, fmt.Errorf("Failed to remove proxy container: %w", err))
+						}
 					}
 				}
 			}
 		}
+	} else {
+		results = append(results, fmt.Errorf("Failed to list proxy containers: %w", err))
 	}
 
-	// stop transport
-	err = docker.StopContainer(types.TransportDeploymentName, cli.DockerInterface)
-	if err != nil {
-		return fmt.Errorf("Could not stop transport container: %w", err)
-	}
-	err = docker.RemoveContainer(types.TransportDeploymentName, cli.DockerInterface)
-	if err != nil {
-		return fmt.Errorf("Could not remove controller container: %w", err)
+	_, err = docker.InspectContainer(types.TransportDeploymentName, cli.DockerInterface)
+	if err == nil {
+		// stop transport
+		err = docker.StopContainer(types.TransportDeploymentName, cli.DockerInterface)
+		if err != nil {
+			results = append(results, fmt.Errorf("Could not stop transport container: %w", err))
+		} else {
+			err = docker.RemoveContainer(types.TransportDeploymentName, cli.DockerInterface)
+			if err != nil {
+				results = append(results, fmt.Errorf("Could not remove controller container: %w", err))
+			}
+		}
 	}
 
-	// remove network
-	err = docker.RemoveNetwork("skupper-network", cli.DockerInterface)
-	if err != nil {
-		return fmt.Errorf("Could not remove skupper network: %w", err)
+	_, err = docker.InspectNetwork("skupper-network", cli.DockerInterface)
+	if err == nil {
+		// remove network
+		err = docker.RemoveNetwork("skupper-network", cli.DockerInterface)
+		if err != nil {
+			results = append(results, fmt.Errorf("Could not remove skupper network: %w", err))
+		}
 	}
 
 	// remove host files
 	err = os.RemoveAll(types.HostPath)
 	if err != nil {
-		return fmt.Errorf("Failed to remove skupper files and directory: %w", err)
+		results = append(results, fmt.Errorf("Failed to remove skupper files and directory: %w", err))
 	}
 
-	return nil
+	return results
 }

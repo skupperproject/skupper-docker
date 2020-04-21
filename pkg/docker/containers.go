@@ -121,7 +121,7 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, isLocal bool)
 	}
 	networkCfg := &dockernetworktypes.NetworkingConfig{
 		EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-			"skupper-network": {},
+			types.TransportNetworkName: {},
 		},
 	}
 
@@ -195,7 +195,7 @@ func RestartControllerContainer(dd libdocker.Interface) error {
 		HostConfig: hostCfg,
 		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
 			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-				"skupper-network": {},
+				types.TransportNetworkName: {},
 			},
 		},
 	}
@@ -238,7 +238,7 @@ func getControllerContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.C
 		},
 		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
 			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-				"skupper-network": {},
+				types.TransportNetworkName: {},
 			},
 		},
 	}
@@ -330,7 +330,7 @@ func RestartTransportContainer(dd libdocker.Interface) error {
 		HostConfig: hostCfg,
 		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
 			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-				"skupper-network": {},
+				types.TransportNetworkName: {},
 			},
 		},
 	}
@@ -377,7 +377,7 @@ func getTransportContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.Co
 		},
 		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
 			EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
-				"skupper-network": {},
+				types.TransportNetworkName: {},
 			},
 		},
 	}

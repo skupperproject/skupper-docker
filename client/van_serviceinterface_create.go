@@ -15,13 +15,12 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName st
 
 	// TODO: check that all options are present
 	// TODO: don't expose same container twice
-
 	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	svcFile, err := ioutil.ReadFile(types.LocalSifs)
+	svcFile, err := ioutil.ReadFile(types.LocalServiceDefsFile)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve skupper service interace definitions: %w", err)
 	}
@@ -68,15 +67,22 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName st
 			return fmt.Errorf("Failed to encode json for service interface: %w", err)
 		}
 
-		err = ioutil.WriteFile(types.LocalSifs, encoded, 0755)
+		err = ioutil.WriteFile(types.LocalServiceDefsFile, encoded, 0755)
 		if err != nil {
 			return fmt.Errorf("Failed to write service interface file: %w", err)
 		}
-	} else if targetType == "host" {
+	} else if targetType == "host-service" {
+		if options.Address == "" {
+			return fmt.Errorf("Host service must specify address, use --address option to provide it")
+		}
 		if options.Port == 0 {
 			return fmt.Errorf("Host service must specify port, use --port option to provide it")
 		}
-		hostIP := utils.GetInternalIP(targetName)
+		if options.TargetPort == 0 {
+			options.TargetPort = options.Port
+		}
+
+		hostIP := utils.GetInternalIP("docker0")
 		if hostIP == "" {
 			return fmt.Errorf("Error retrieving host target network address")
 		}
@@ -103,7 +109,7 @@ func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName st
 			return fmt.Errorf("Failed to encode json for service interface: %w", err)
 		}
 
-		err = ioutil.WriteFile(types.LocalSifs, encoded, 0755)
+		err = ioutil.WriteFile(types.LocalServiceDefsFile, encoded, 0755)
 		if err != nil {
 			return fmt.Errorf("Failed to write service interface file: %w", err)
 		}

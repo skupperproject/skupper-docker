@@ -27,14 +27,20 @@ const (
 
 func exposeTarget() func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		if len(args) < 2 {
-			return fmt.Errorf("expose target must be specified (e.g. 'skupper expose container <name>'")
+		if len(args) < 1 {
+			return fmt.Errorf("expose type must be specified (e.g. 'skupper-docker expose container' or 'skupper-docker expose host-service')")
 		}
-		if len(args) > 2 {
-			return fmt.Errorf("illegal argument: %s", args[2])
+		if args[0] == "container" && len(args) < 2 {
+			return fmt.Errorf("expose container target must be specified (e.g. 'skupper-docker expose container <name>'")
 		}
-		if args[0] != "container" && args[0] != "host" {
-			return fmt.Errorf("expose target type must be one of 'container', or 'host'")
+		if args[0] == "container" && len(args) > 2 {
+			return fmt.Errorf("illegal argument for expose container: %s", args[2])
+		}
+		if args[0] == "host-service" && len(args) > 1 {
+			return fmt.Errorf("illegal argument for expose host-service: %s", args[1])
+		}
+		if args[0] != "container" && args[0] != "host-service" {
+			return fmt.Errorf("expose target type must be one of 'container', or 'host-service'")
 		}
 		return nil
 	}
@@ -75,11 +81,14 @@ func main() {
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
-			err := cli.VanRouterRemove()
-			if err == nil {
-				fmt.Println("Skupper resources now removed")
+			errors := cli.VanRouterRemove()
+			if len(errors) > 0 {
+				fmt.Println("Error(s) encountered removing skupper resources:")
+				for _, err := range errors {
+					fmt.Println("        ", err.Error())
+				}
 			} else {
-				fmt.Println("Unable to uninstall Skupper resources:", err.Error())
+				fmt.Println("Skupper resources now removed")
 			}
 		},
 	}
@@ -254,16 +263,26 @@ func main() {
 
 	vanServiceInterfaceCreateOpts := types.VanServiceInterfaceCreateOptions{}
 	var cmdExpose = &cobra.Command{
-		Use:   "expose [container <name>|host <name>]",
+		Use:   "expose [container <name>|host-service]",
 		Short: "Expose a skupper address and optionally a local target to the skupper network",
 		Args:  exposeTarget(),
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
-			err := cli.VanServiceInterfaceCreate(args[0], args[1], vanServiceInterfaceCreateOpts)
-			if err == nil {
-				fmt.Printf("VAN Service Interface Target %s exposed\n", args[1])
-			} else {
-				fmt.Println("Error, unable to create VAN service interface: ", err.Error())
+			if args[0] == "container" {
+				err := cli.VanServiceInterfaceCreate(args[0], args[1], vanServiceInterfaceCreateOpts)
+				if err == nil {
+					fmt.Printf("VAN Service Interface container Target %s exposed\n", args[1])
+				} else {
+					fmt.Println("Error, unable to create VAN service interface: ", err.Error())
+				}
+			}
+			if args[0] == "host-service" {
+				err := cli.VanServiceInterfaceCreate(args[0], "", vanServiceInterfaceCreateOpts)
+				if err == nil {
+					fmt.Printf("VAN Service Interface host-service Target %s exposed\n", args[0])
+				} else {
+					fmt.Println("Error, unable to create VAN service interface: ", err.Error())
+				}
 			}
 		},
 	}
@@ -271,20 +290,29 @@ func main() {
 	cmdExpose.Flags().StringVar(&(vanServiceInterfaceCreateOpts.Address), "address", "", "The Skupper address to expose")
 	cmdExpose.Flags().IntVar(&(vanServiceInterfaceCreateOpts.Port), "port", 0, "The port to expose on")
 	cmdExpose.Flags().IntVar(&(vanServiceInterfaceCreateOpts.TargetPort), "target-port", 0, "The port to target on container or process")
-	//	cmdExpose.Flags().BoolVar(&(vanServiceInterfaceCreateOpts.Headless), "headless", false, "Expose through a headless service (valid only for a statefulset target)")
 
 	vanServiceInterfaceRemoveOpts := types.VanServiceInterfaceRemoveOptions{}
 	var cmdUnexpose = &cobra.Command{
-		Use:   "unexpose [container <name>|host <name>]",
+		Use:   "unexpose [container <name>|host-service]",
 		Short: "Unexpose container or host process previously exposed via skupper address",
 		Args:  exposeTarget(),
 		Run: func(cmd *cobra.Command, args []string) {
 			cli, _ := client.NewClient(dockerEndpoint)
-			err := cli.VanServiceInterfaceRemove(args[0], args[1], vanServiceInterfaceRemoveOpts)
-			if err == nil {
-				fmt.Printf("VAN Service Interface Target %s unexposed\n", args[0])
-			} else {
-				fmt.Println("Error, unable to remove VAN service interface: ", err.Error())
+			if args[0] == "container" {
+				err := cli.VanServiceInterfaceRemove(args[0], args[1], vanServiceInterfaceRemoveOpts)
+				if err == nil {
+					fmt.Printf("VAN Service Interface container Target %s unexposed\n", args[1])
+				} else {
+					fmt.Println("Error, unable to remove VAN service interface: ", err.Error())
+				}
+			}
+			if args[0] == "host-service" {
+				err := cli.VanServiceInterfaceRemove(args[0], "", vanServiceInterfaceRemoveOpts)
+				if err == nil {
+					fmt.Printf("VAN Service Interface host-service Target %s unexposed\n", vanServiceInterfaceRemoveOpts.Address)
+				} else {
+					fmt.Println("Error, unable to remove VAN service interface: ", err.Error())
+				}
 			}
 		},
 	}
@@ -319,6 +347,13 @@ func main() {
 							}
 						}
 					}
+					fmt.Println()
+					fmt.Println("Aliases for services exposed through Skupper:")
+					for _, si := range vsis {
+						fmt.Printf("    %s %s", si.Alias, si.Address)
+						fmt.Println()
+					}
+					fmt.Println()
 				}
 			} else {
 				fmt.Println("Unable to retrieve service interfaces", err.Error())
@@ -343,7 +378,7 @@ func main() {
 		},
 	}
 
-	var rootCmd = &cobra.Command{Use: "skupper"}
+	var rootCmd = &cobra.Command{Use: "skupper-docker"}
 	rootCmd.Version = version
 	rootCmd.AddCommand(cmdInit, cmdDelete, cmdConnectionToken, cmdConnect, cmdDisconnect, cmdCheckConnection, cmdListConnectors, cmdExpose, cmdUnexpose, cmdListExposed, cmdStatus, cmdVersion)
 	rootCmd.PersistentFlags().StringVarP(&dockerEndpoint, "endpoint", "e", "", "docker endpoint to use")

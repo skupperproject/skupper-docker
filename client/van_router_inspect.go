@@ -43,5 +43,12 @@ func (cli *VanClient) VanRouterInspect() (*types.VanRouterInspectResponse, error
 	}
 	vir.Status.ConnectedSites = connected
 
+	vsis, err := cli.VanServiceInterfaceList()
+	if err != nil {
+		vir.ExposedServices = 0
+	} else {
+		vir.ExposedServices = len(vsis)
+	}
+
 	return vir, err
 }

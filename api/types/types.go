@@ -47,6 +47,7 @@ const (
 	TransportLivenessPort   int32  = 9090
 	TransportEnvConfig      string = "QDROUTERD_CONF"
 	TransportSaslConfig     string = "skupper-sasl-config"
+	TransportNetworkName    string = "skupper-network"
 )
 
 var TransportPrometheusAnnotations = map[string]string{
@@ -60,7 +61,7 @@ const (
 	ControllerComponentName  string = "controller"
 	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller"
 	ControllerContainerName  string = "proxy-controller"
-	DefaultProxyImage        string = "quay.io/skupper/icproxy-simple"
+	DefaultProxyImage        string = "quay.io/skupper/proxy-simple"
 	ControllerConfigPath     string = "/etc/messaging/"
 )
 
@@ -94,11 +95,11 @@ const (
 	InterRouterProfile      string = "skupper-internal"
 )
 
-// Service Interface constants
+// Controller Service Interface constants
 const (
-	ServiceSyncAddress = "mc/$skupper-service-sync"
-	LocalSifs          = ServicePath + "local-skupper-services"
-	AllSifs            = ServicePath + "all-skupper-services"
+	ServiceSyncAddress   = "mc/$skupper-service-sync"
+	LocalServiceDefsFile = ServicePath + "/local/skupper-services"
+	AllServiceDefsFile   = ServicePath + "/all/skupper-services"
 )
 
 // TODO: what is possiblity of using types from skupper itself (e.g. no namespace for docker
@@ -211,6 +212,7 @@ type ServiceInterface struct {
 	Headless *Headless                `json:"headless,omitempty"`
 	Targets  []ServiceInterfaceTarget `json:"targets"`
 	Origin   string                   `json:"origin,omitempty"`
+	Alias    string                   `json:"alias,omitempty"`
 }
 
 type ServiceInterfaceTarget struct {
