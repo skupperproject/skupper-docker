@@ -175,7 +175,8 @@ func GetVanRouterSpecFromOpts(options types.VanRouterCreateOptions, client *VanC
 	envVars := []string{}
 	if !options.IsEdge {
 		envVars = append(envVars, "APPLICATION_NAME="+types.TransportDeploymentName)
-		envVars = append(envVars, "QDROUTERD_AUTO_MESH_DISCOVERY=QUERY")
+		// TODO: auto_mesh for non k8s deploy
+		//		envVars = append(envVars, "QDROUTERD_AUTO_MESH_DISCOVERY=QUERY")
 	}
 	if options.AuthMode == string(types.ConsoleAuthModeInternal) {
 		envVars = append(envVars, "QDROUTERD_AUTO_CREATE_SASLDB_SOURCE=/etc/qpid-dispatch/sasl-users/")
@@ -297,6 +298,7 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 				return fmt.Errorf("--router-console-password only valid when --router-console-auth=internal")
 			}
 		}
+
 	}
 
 	// TODO check if resources already exist: either delete them all or error out
@@ -342,9 +344,6 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 	if err := os.Mkdir(types.ServicePath+"all/", 0755); err != nil {
 		return err
 	}
-	//	if err := os.Mkdir(types.ServicePath, 0755); err != nil {
-	//		return err
-	//	}
 
 	// create skupper-services file
 	svcDefs := make(map[string]types.ServiceInterface)
@@ -359,6 +358,22 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 	err = ioutil.WriteFile(types.AllServiceDefsFile, encoded, 0755)
 	if err != nil {
 		return err
+	}
+
+	if options.EnableConsole && options.AuthMode == string(types.ConsoleAuthModeInternal) {
+		config := `
+pwcheck_method: auxprop
+auxprop_plugin: sasldb
+sasldb_path: /tmp/qdrouterd.sasldb
+`
+		err := ioutil.WriteFile(types.SaslConfigPath+"/qdrouterd.conf", []byte(config), 0755)
+		if err != nil {
+			return err
+		}
+		err = ioutil.WriteFile(types.ConsoleUsersPath+"/"+options.User, []byte(options.Password), 0755)
+		if err != nil {
+			return err
+		}
 	}
 
 	// create user network
