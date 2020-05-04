@@ -1,7 +1,0 @@
-go 1.13
-
-require (
-    github.com/docker/docker master
-    github.com/skupperproject/skupper-cli master
-    github.com/Azure/go-amqp v0.12.7    
-)

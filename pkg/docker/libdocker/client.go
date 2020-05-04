@@ -28,7 +28,7 @@ type Interface interface {
 	Logs(string, dockertypes.ContainerLogsOptions, StreamOptions) error
 	Version() (*dockertypes.Version, error)
 	Info() (*dockertypes.Info, error)
-    AttachExec(string, dockertypes.ExecStartCheck) (*dockertypes.HijackedResponse, error)
+	AttachExec(string, dockertypes.ExecStartCheck) (*dockertypes.HijackedResponse, error)
 	CreateExec(string, dockertypes.ExecConfig) (*dockertypes.IDResponse, error)
 	StartExec(string, dockertypes.ExecStartCheck, StreamOptions) error
 	InspectExec(id string) (*dockertypes.ContainerExecInspect, error)
