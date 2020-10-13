@@ -1,4 +1,4 @@
-VERSION := $(shell git describe --tags --dirty=-modified)
+VERSION := $(shell git describe --tags --dirty=-modified --always)
 IMAGE := quay.io/skupper/skupper-docker-controller
 
 all: build-cmd build-controller
@@ -7,13 +7,19 @@ build-cmd:
 	go build -ldflags="-X main.version=${VERSION}"  -o skupper-docker cmd/skupper-docker/main.go
 
 build-controller:
-	go build -ldflags="-X main.version=${VERSION}"  -o skupper-docker-controller cmd/skupper-docker-controller/main.go cmd/skupper-docker-controller/controller.go cmd/skupper-docker-controller/service_sync.go
+	go build -ldflags="-X main.version=${VERSION}"  -o controller cmd/skupper-docker-controller/main.go cmd/skupper-docker-controller/controller.go cmd/skupper-docker-controller/service_sync.go
 
 docker-build:
 	docker build -t ${IMAGE} .
 
 docker-push:
 	docker push ${IMAGE}
+
+format:
+	go fmt ./...
+
+vet:
+	go vet ./...
 
 clean:
 	rm -rf skupper-docker skupper-docker-controller release

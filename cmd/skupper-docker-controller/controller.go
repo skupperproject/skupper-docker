@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	amqp "github.com/Azure/go-amqp"
+	amqp "github.com/interconnectedcloud/go-amqp"
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockerfilters "github.com/docker/docker/api/types/filters"

@@ -149,7 +149,7 @@ func NewProxyContainer(svcDef types.ServiceInterface, isLocal bool, dd libdocker
 }
 
 func RestartControllerContainer(dd libdocker.Interface) error {
-	current, err := InspectContainer("skupper-proxy-controller", dd)
+	current, err := InspectContainer(types.ControllerDeploymentName, dd)
 	if err != nil {
 		return err
 	}
@@ -179,18 +179,18 @@ func RestartControllerContainer(dd libdocker.Interface) error {
 	}
 
 	// remove current and create new container
-	err = StopContainer("skupper-proxy-controller", dd)
+	err = StopContainer(types.ControllerDeploymentName, dd)
 	if err != nil {
 		log.Println("Failed to stop controller container", err.Error())
 	}
 
-	err = RemoveContainer("skupper-proxy-controller", dd)
+	err = RemoveContainer(types.ControllerDeploymentName, dd)
 	if err != nil {
 		log.Println("Failed to remove controller container", err.Error())
 	}
 
 	opts := &dockertypes.ContainerCreateConfig{
-		Name:       "skupper-proxy-controller",
+		Name:       types.ControllerDeploymentName,
 		Config:     containerCfg,
 		HostConfig: hostCfg,
 		NetworkingConfig: &dockernetworktypes.NetworkingConfig{
@@ -205,7 +205,7 @@ func RestartControllerContainer(dd libdocker.Interface) error {
 		log.Println("Failed to re-create controller container", err.Error())
 	}
 
-	err = StartContainer("skupper-proxy-controller", dd)
+	err = StartContainer(types.ControllerDeploymentName, dd)
 	if err != nil {
 		log.Println("Failed to re-start controller container", err.Error())
 	}
@@ -228,7 +228,7 @@ func getControllerContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.C
 		Config: &dockercontainer.Config{
 			Hostname: types.ControllerDeploymentName,
 			Image:    van.Controller.Image,
-			Cmd:      []string{"/go/src/app/controller"},
+			Cmd:      []string{"/app/controller"},
 			Env:      van.Controller.EnvVar,
 			Labels:   van.Controller.Labels,
 		},

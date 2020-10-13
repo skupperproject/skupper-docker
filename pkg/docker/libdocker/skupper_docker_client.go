@@ -624,6 +624,10 @@ func (d *skupDockerClient) CreateNetwork(id string) (dockertypes.NetworkCreateRe
 	ncr, err := d.client.NetworkCreate(ctx, id, dockertypes.NetworkCreate{
 		CheckDuplicate: true,
 		Driver:         "bridge",
+		Options: map[string]string{
+			"com.docker.network.bridge.name":       "skupper0",
+			"com.docker.network.bridge.enable_icc": "true",
+		},
 	})
 	if ctxErr := contextError(ctx); ctxErr != nil {
 		return ncr, ctxErr

@@ -3,9 +3,9 @@ package client
 import (
 	"fmt"
 
-	"github.com/skupperproject/skupper-cli/pkg/certs"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
+	"github.com/skupperproject/skupper/pkg/certs"
 )
 
 func (cli *VanClient) VanConnectorTokenCreate(subject string, secretFile string) error {

@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/skupperproject/skupper-cli/pkg/certs"
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
+	"github.com/skupperproject/skupper/pkg/certs"
 )
 
 func generateConnectorName(path string) (string, error) {
@@ -36,9 +36,9 @@ func generateConnectorName(path string) (string, error) {
 func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanConnectorCreateOptions) error {
 
 	// TODO certs should return err
-	secret := certs.GetSecretContent(secretFile)
-	if secret == nil {
-		return fmt.Errorf("Failed to make connector, missing connection-token content")
+	secret, err := certs.GetSecretContent(secretFile)
+	if err != nil {
+		return fmt.Errorf("Failed to make connector: %w", err)
 	}
 
 	existing, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
@@ -88,10 +88,21 @@ func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanCon
 		return fmt.Errorf("Failed to re-start transport container: %w", err)
 	}
 
-	err = docker.RestartContainer("skupper-proxy-controller", cli.DockerInterface)
-	//	err = docker.RestartControllerContainer(cli.DockerInterface)
+	err = docker.RestartContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
 		return fmt.Errorf("Failed to re-start controller container: %w", err)
+	}
+
+	// restart proxies
+	vsis, err := cli.VanServiceInterfaceList()
+	if err != nil {
+		return fmt.Errorf("Failed to list proxies to restart: %w", err)
+	}
+	for _, vs := range vsis {
+		err = docker.RestartContainer(vs.Address, cli.DockerInterface)
+		if err != nil {
+			return fmt.Errorf("Failed to restart proxy container: %w", err)
+		}
 	}
 
 	return err

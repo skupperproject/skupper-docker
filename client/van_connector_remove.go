@@ -26,9 +26,21 @@ func (cli *VanClient) VanConnectorRemove(name string) error {
 		return fmt.Errorf("Failed to restart transport container: %w", err)
 	}
 
-	err = docker.RestartControllerContainer(cli.DockerInterface)
+	err = docker.RestartContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
 		return fmt.Errorf("Failed to restart controller container: %w", err)
+	}
+
+	// restart proxies
+	vsis, err := cli.VanServiceInterfaceList()
+	if err != nil {
+		return fmt.Errorf("Failed to list proxies to restart: %w", err)
+	}
+	for _, vs := range vsis {
+		err = docker.RestartContainer(vs.Address, cli.DockerInterface)
+		if err != nil {
+			return fmt.Errorf("Failed to restart proxy container: %w", err)
+		}
 	}
 
 	return nil
