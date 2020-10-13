@@ -11,7 +11,7 @@ import (
 
 	"github.com/docker/go-connections/nat"
 
-	"github.com/skupperproject/skupper-cli/pkg/certs"
+	"github.com/skupperproject/skupper/pkg/certs"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
@@ -119,7 +119,7 @@ func GetVanRouterSpecFromOpts(options types.VanRouterCreateOptions, client *VanC
 		Host:             "0.0.0.0",
 		Port:             5671,
 		SslProfile:       "skupper-amqps",
-		SaslMechanisms:   "ANONYMOUS",
+		SaslMechanisms:   "EXTERNAL",
 		AuthenticatePeer: false,
 	})
 	if van.AuthMode == types.ConsoleAuthModeInternal {

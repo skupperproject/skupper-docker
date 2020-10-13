@@ -1,10 +1,15 @@
-FROM golang:1.13
+FROM golang:1.13 AS builder
 
 WORKDIR /go/src/app
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
 COPY . .
 
-RUN go mod download
+RUN make build-controller
 
-RUN go build -o controller cmd/skupper-docker-controller/main.go cmd/skupper-docker-controller/controller.go cmd/skupper-docker-controller/service_sync.go
+FROM registry.access.redhat.com/ubi8-minimal
 
-CMD ["/go/src/app/controller"]
+WORKDIR /app
+COPY --from=builder /go/src/app/controller .
+CMD ["/app/controller"]

@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	//	"io/ioutil"
 	"log"
 	"reflect"
 	"sort"
 	"time"
 
-	amqp "github.com/Azure/go-amqp"
+	amqp "github.com/interconnectedcloud/go-amqp"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/skupperproject/skupper-docker/api/types"
@@ -171,11 +170,12 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) error {
 	ctx := context.Background()
 
-	log.Println("Establishing connection to skupper transport service")
-	client, err := amqp.Dial("amqps://skupper-router:5671", amqp.ConnSASLAnonymous(), amqp.ConnMaxFrameSize(4294967295), amqp.ConnTLSConfig(c.tlsConfig))
+	log.Println("Establishing connection to skupper-messaging service for service sync")
+	client, err := amqp.Dial("amqps://skupper-router:5671", amqp.ConnSASLExternal(), amqp.ConnMaxFrameSize(4294967295), amqp.ConnTLSConfig(c.tlsConfig))
 	if err != nil {
 		return fmt.Errorf("Failed to create amqp connection: %w", err)
 	}
+	log.Println("Service sync connection to skupper-messaging service established")
 	c.amqpClient = client
 	defer c.amqpClient.Close()
 
@@ -223,7 +223,6 @@ func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) 
 						err := json.Unmarshal([]byte(updates), &defs)
 						if err == nil {
 							indexed := make(map[string]types.ServiceInterface)
-							log.Printf("Received service-sync-update from %s: %s\n", origin, updates)
 							for _, def := range defs {
 								def.Origin = origin
 								indexed[def.Address] = def

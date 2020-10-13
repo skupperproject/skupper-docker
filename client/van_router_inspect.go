@@ -2,14 +2,9 @@ package client
 
 import (
 	"fmt"
-	//	"io/ioutil"
 	"log"
-	//	"os"
-	//	"regexp"
-	//	"strconv"
 	"time"
 
-	//	"github.com/skupperproject/skupper-cli/pkg/certs"
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
@@ -25,7 +20,7 @@ func (cli *VanClient) VanRouterInspect() (*types.VanRouterInspectResponse, error
 	}
 	vir.TransportVersion = fmt.Sprintf("%s (%s)", transport.Config.Image, transport.Image[:19])
 
-	controller, err := docker.InspectContainer("skupper-proxy-controller", cli.DockerInterface)
+	controller, err := docker.InspectContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
 		log.Println("Failed to retrieve controller container (need init?): ", err.Error())
 		return vir, err
