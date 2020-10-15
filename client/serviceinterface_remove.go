@@ -9,7 +9,7 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 )
 
-func (cli *VanClient) VanServiceInterfaceRemove(targetType string, targetName string, options types.VanServiceInterfaceRemoveOptions) error {
+func (cli *VanClient) ServiceInterfaceRemove(targetType string, targetName string, options types.ServiceInterfaceRemoveOptions) error {
 	// TODO: check that all options are present
 	if targetType == "host-service" && options.Address == "" {
 		return fmt.Errorf("Unexpose host-service must specify address, use --address option to provide it")

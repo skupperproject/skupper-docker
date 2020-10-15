@@ -9,7 +9,7 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 )
 
-func (cli *VanClient) VanServiceInterfaceList() ([]types.ServiceInterface, error) {
+func (cli *VanClient) ServiceInterfaceList() ([]types.ServiceInterface, error) {
 	var vsis []types.ServiceInterface
 	svcDefs := make(map[string]types.ServiceInterface)
 

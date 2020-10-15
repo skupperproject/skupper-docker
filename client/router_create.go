@@ -76,8 +76,8 @@ func ensureCA(name string) (certs.CertificateData, error) {
 	return caData, nil
 }
 
-func GetVanRouterSpecFromOpts(options types.VanRouterCreateOptions, client *VanClient) (*types.VanRouterSpec, error) {
-	van := &types.VanRouterSpec{}
+func GetRouterSpecFromOpts(options types.RouterCreateOptions, client *VanClient) (*types.RouterSpec, error) {
+	van := &types.RouterSpec{}
 	//TODO: think througn van name, router name, secret names, etc.
 	if options.SkupperName == "" {
 		info, _ := client.DockerInterface.Info()
@@ -278,8 +278,8 @@ func GetVanRouterSpecFromOpts(options types.VanRouterCreateOptions, client *VanC
 	return van, nil
 }
 
-// VanRouterCreate instantiates a VAN Router (transport and controller)
-func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) error {
+// RouterCreate instantiates a VAN Router (transport and controller)
+func (cli *VanClient) RouterCreate(options types.RouterCreateOptions) error {
 	//TODO return error
 	if options.EnableConsole {
 		if options.AuthMode == string(types.ConsoleAuthModeInternal) || options.AuthMode == "" {
@@ -303,7 +303,7 @@ func (cli *VanClient) VanRouterCreate(options types.VanRouterCreateOptions) erro
 
 	// TODO check if resources already exist: either delete them all or error out
 
-	van, err := GetVanRouterSpecFromOpts(options, cli)
+	van, err := GetRouterSpecFromOpts(options, cli)
 	if err != nil {
 		return err
 	}

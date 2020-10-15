@@ -33,17 +33,17 @@ func generateConnectorName(path string) (string, error) {
 	return "conn" + strconv.Itoa(max), nil
 }
 
-func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanConnectorCreateOptions) error {
+func (cli *VanClient) ConnectorCreate(secretFile string, options types.ConnectorCreateOptions) (string, error) {
 
 	// TODO certs should return err
 	secret, err := certs.GetSecretContent(secretFile)
 	if err != nil {
-		return fmt.Errorf("Failed to make connector: %w", err)
+		return "", fmt.Errorf("Failed to make connector: %w", err)
 	}
 
 	existing, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
+		return "", fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
 	mode := qdr.GetTransportMode(existing)
@@ -51,17 +51,17 @@ func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanCon
 	if options.Name == "" {
 		options.Name, err = generateConnectorName(types.ConnPath)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 	connPath := types.ConnPath + options.Name
 
 	if err := os.Mkdir(connPath, 0755); err != nil {
-		return fmt.Errorf("Failed to create skupper connector directory: %w", err)
+		return "", fmt.Errorf("Failed to create skupper connector directory: %w", err)
 	}
 	for k, v := range secret {
 		if err := ioutil.WriteFile(connPath+"/"+k, v, 0755); err != nil {
-			return fmt.Errorf("Failed to write connector certificate file: %w", err)
+			return "", fmt.Errorf("Failed to write connector certificate file: %w", err)
 		}
 	}
 
@@ -85,25 +85,25 @@ func (cli *VanClient) VanConnectorCreate(secretFile string, options types.VanCon
 
 	err = docker.RestartTransportContainer(cli.DockerInterface)
 	if err != nil {
-		return fmt.Errorf("Failed to re-start transport container: %w", err)
+		return "", fmt.Errorf("Failed to re-start transport container: %w", err)
 	}
 
 	err = docker.RestartContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
-		return fmt.Errorf("Failed to re-start controller container: %w", err)
+		return "", fmt.Errorf("Failed to re-start controller container: %w", err)
 	}
 
 	// restart proxies
-	vsis, err := cli.VanServiceInterfaceList()
+	vsis, err := cli.ServiceInterfaceList()
 	if err != nil {
-		return fmt.Errorf("Failed to list proxies to restart: %w", err)
+		return "", fmt.Errorf("Failed to list proxies to restart: %w", err)
 	}
 	for _, vs := range vsis {
 		err = docker.RestartContainer(vs.Address, cli.DockerInterface)
 		if err != nil {
-			return fmt.Errorf("Failed to restart proxy container: %w", err)
+			return "", fmt.Errorf("Failed to restart proxy container: %w", err)
 		}
 	}
 
-	return err
+	return options.Name, nil
 }

@@ -104,8 +104,8 @@ const (
 
 // TODO: what is possiblity of using types from skupper itself (e.g. no namespace for docker
 // or we change the name to endpoint, etc.
-// VanRouterSpec is the specification of VAN network with router, controller and assembly
-type VanRouterSpec struct {
+// RouterSpec is the specification of VAN network with router, controller and assembly
+type RouterSpec struct {
 	Name string `json:"name,omitempty"`
 	//	Namespace      string          `json:"namespace,omitempty"`
 	AuthMode       ConsoleAuthMode `json:"authMode,omitempty"`
@@ -203,6 +203,7 @@ type TransportConnectedSites struct {
 	Direct   int
 	Indirect int
 	Total    int
+	Warnings []string
 }
 
 type ServiceInterface struct {

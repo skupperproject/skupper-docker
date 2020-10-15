@@ -10,7 +10,7 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/utils"
 )
 
-func (cli *VanClient) VanServiceInterfaceCreate(targetType string, targetName string, options types.VanServiceInterfaceCreateOptions) error {
+func (cli *VanClient) ServiceInterfaceCreate(targetType string, targetName string, options types.ServiceInterfaceCreateOptions) error {
 	svcDefs := make(map[string]types.ServiceInterface)
 
 	// TODO: check that all options are present
