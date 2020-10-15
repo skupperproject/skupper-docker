@@ -241,7 +241,6 @@ func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) 
 			log.Println("Service sync subject not valid")
 		}
 	}
-	return nil
 }
 
 func (c *Controller) runServiceSyncLocalWatcher(syncUpdate chan *ServiceSyncUpdate) {

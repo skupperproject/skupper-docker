@@ -393,9 +393,6 @@ func NewTransportContainer(van *types.RouterSpec, dd libdocker.Interface) (*dock
 	_, err := dd.CreateContainer(*opts)
 	if err != nil {
 		return nil, err
-	} else {
-		return opts, nil
 	}
-
-	return nil, nil
+	return opts, nil
 }
