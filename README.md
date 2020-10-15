@@ -27,10 +27,10 @@ CONTAINER ID        IMAGE                                       COMMAND         
 d8c9edc2f4a0        quay.io/interconnectedcloud/qdrouterd       "/home/qdrouterd/bin…"   50 minutes ago      Up 50 minutes       5671-5672/tcp, 9090/tcp, 45671/tcp, 55671-55672/tcp   skupper-router
 ```
 
-2. Log into the router container using the CONTAINER ID, for example:
+2. Log into the router container:
 
 ```
-$ docker exec -it d8c9edc2f4a0 /bin/bash
+$ docker exec -it skupper-router /bin/bash
 ```
 
 3. Check the router stats:
