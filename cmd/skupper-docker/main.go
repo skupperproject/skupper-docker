@@ -171,7 +171,7 @@ installation that can then be connected to other skupper installations`,
 			if err != nil {
 				return err
 			}
-			fmt.Println("Skupper is now installed.  Use 'skupper status' to get more information.")
+			fmt.Println("Skupper is now installed.  Use 'skupper-docker status' to get more information.")
 			return nil
 		},
 	}
