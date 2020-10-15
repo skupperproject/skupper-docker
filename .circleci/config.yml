@@ -1,0 +1,39 @@
+version: 2.1
+
+orbs:
+    docker: circleci/docker@1.0.1
+    go: circleci/go@1.1.1
+
+executors:
+  go_and_docker_executor:
+    machine:
+      image: circleci/classic:latest
+
+commands:
+  prepare_vm:
+    description: install right versions of go and docker
+    steps:
+      - docker/install-docker
+      - run: sudo rm -rf /usr/local/go
+      - go/install
+
+
+workflows:
+  version: 2.1
+  build-workflow:
+    jobs:
+      - build
+
+jobs:
+  build:
+    executor: go_and_docker_executor
+    steps:
+      - prepare_vm
+      - checkout
+      - run: make
+      - run: make docker-build
+      #- run: make docker push ## TODO enable this
+      - run: make package
+      - run: go test -v ./...
+      - run: ./skupper-docker init
+      - run: make clean
