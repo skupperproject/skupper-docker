@@ -49,3 +49,4 @@ Connections
 ```
 
 This shows typical output for a successfully instantiated skupper site.
+If you do not see similar output, check your Docker network configuration, for example firewall settings.
