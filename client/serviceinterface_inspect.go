@@ -20,7 +20,7 @@ func (cli *VanClient) ServiceInterfaceInspect(address string) (*types.ServiceInt
 		return nil, fmt.Errorf("Failed to decode json for service interface definitions: %w", err)
 	}
 	if vsi, ok := svcDefs[address]; !ok {
-		return nil, fmt.Errorf("Service Interface not found: ", address)
+		return nil, fmt.Errorf("Service Interface not found: %s", address)
 	} else {
 		return &vsi, nil
 	}
