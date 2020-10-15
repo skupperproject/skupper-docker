@@ -22,7 +22,7 @@ vet:
 	go vet ./...
 
 clean:
-	rm -rf skupper-docker skupper-docker-controller release
+	rm -rf skupper-docker controller release
 
 package: release/windows.zip release/darwin.zip release/linux.tgz
 
