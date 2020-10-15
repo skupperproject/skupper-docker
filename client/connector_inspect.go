@@ -38,8 +38,8 @@ func getConnector(name string, mode types.TransportMode) (*types.Connector, erro
 	return connector, nil
 }
 
-func (cli *VanClient) VanConnectorInspect(name string) (*types.VanConnectorInspectResponse, error) {
-	vci := &types.VanConnectorInspectResponse{}
+func (cli *VanClient) ConnectorInspect(name string) (*types.ConnectorInspectResponse, error) {
+	vci := &types.ConnectorInspectResponse{}
 
 	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {

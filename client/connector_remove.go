@@ -8,7 +8,7 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 )
 
-func (cli *VanClient) VanConnectorRemove(name string) error {
+func (cli *VanClient) ConnectorRemove(name string) error {
 
 	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
@@ -32,7 +32,7 @@ func (cli *VanClient) VanConnectorRemove(name string) error {
 	}
 
 	// restart proxies
-	vsis, err := cli.VanServiceInterfaceList()
+	vsis, err := cli.ServiceInterfaceList()
 	if err != nil {
 		return fmt.Errorf("Failed to list proxies to restart: %w", err)
 	}

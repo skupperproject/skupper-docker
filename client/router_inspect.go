@@ -10,8 +10,8 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
 )
 
-func (cli *VanClient) VanRouterInspect() (*types.VanRouterInspectResponse, error) {
-	vir := &types.VanRouterInspectResponse{}
+func (cli *VanClient) RouterInspect() (*types.RouterInspectResponse, error) {
+	vir := &types.RouterInspectResponse{}
 
 	transport, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
@@ -19,6 +19,7 @@ func (cli *VanClient) VanRouterInspect() (*types.VanRouterInspectResponse, error
 		return vir, err
 	}
 	vir.TransportVersion = fmt.Sprintf("%s (%s)", transport.Config.Image, transport.Image[:19])
+	vir.Status.State = transport.State.Status
 
 	controller, err := docker.InspectContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
@@ -38,7 +39,7 @@ func (cli *VanClient) VanRouterInspect() (*types.VanRouterInspectResponse, error
 	}
 	vir.Status.ConnectedSites = connected
 
-	vsis, err := cli.VanServiceInterfaceList()
+	vsis, err := cli.ServiceInterfaceList()
 	if err != nil {
 		vir.ExposedServices = 0
 	} else {

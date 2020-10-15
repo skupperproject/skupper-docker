@@ -8,7 +8,7 @@ import (
 	"github.com/skupperproject/skupper-docker/api/types"
 )
 
-func (cli *VanClient) VanServiceInterfaceInspect(address string) (*types.ServiceInterface, error) {
+func (cli *VanClient) ServiceInterfaceInspect(address string) (*types.ServiceInterface, error) {
 	svcDefs := make(map[string]types.ServiceInterface)
 
 	svcFile, err := ioutil.ReadFile(types.AllServiceDefsFile)

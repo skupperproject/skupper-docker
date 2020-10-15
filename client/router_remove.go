@@ -13,8 +13,8 @@ import (
 
 //TODO should there be remove options
 
-// VanRouterRemove delete a VAN (transport and controller) deployment
-func (cli *VanClient) VanRouterRemove() []error {
+// RouterRemove delete a VAN (transport and controller) deployment
+func (cli *VanClient) RouterRemove() []error {
 	results := []error{}
 
 	_, err := docker.InspectContainer(types.ControllerDeploymentName, cli.DockerInterface)

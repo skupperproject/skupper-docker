@@ -41,7 +41,7 @@ func retrieveConnectors(mode types.TransportMode) ([]*types.Connector, error) {
 	return connectors, nil
 }
 
-func (cli *VanClient) VanConnectorList() ([]*types.Connector, error) {
+func (cli *VanClient) ConnectorList() ([]*types.Connector, error) {
 	var connectors []*types.Connector
 	// verify that the transport is interior mode
 	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)

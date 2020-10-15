@@ -213,7 +213,7 @@ func RestartControllerContainer(dd libdocker.Interface) error {
 	return nil
 }
 
-func getControllerContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.ContainerCreateConfig {
+func getControllerContainerCreateConfig(van *types.RouterSpec) *dockertypes.ContainerCreateConfig {
 	mounts := []dockermounttypes.Mount{}
 	for source, target := range van.Controller.Mounts {
 		mounts = append(mounts, dockermounttypes.Mount{
@@ -247,7 +247,7 @@ func getControllerContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.C
 }
 
 // TODO: unify the two news
-func NewControllerContainer(van *types.VanRouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
+func NewControllerContainer(van *types.RouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
 	opts := getControllerContainerCreateConfig(van)
 
 	// TODO: where should create and start be, here or in up a
@@ -348,7 +348,7 @@ func RestartTransportContainer(dd libdocker.Interface) error {
 	return nil
 }
 
-func getTransportContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.ContainerCreateConfig {
+func getTransportContainerCreateConfig(van *types.RouterSpec) *dockertypes.ContainerCreateConfig {
 	mounts := []dockermounttypes.Mount{}
 	for source, target := range van.Transport.Mounts {
 		mounts = append(mounts, dockermounttypes.Mount{
@@ -385,7 +385,7 @@ func getTransportContainerCreateConfig(van *types.VanRouterSpec) *dockertypes.Co
 	return opts
 }
 
-func NewTransportContainer(van *types.VanRouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
+func NewTransportContainer(van *types.RouterSpec, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
 
 	opts := getTransportContainerCreateConfig(van)
 

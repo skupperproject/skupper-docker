@@ -8,7 +8,7 @@ import (
 	"github.com/skupperproject/skupper/pkg/certs"
 )
 
-func (cli *VanClient) VanConnectorTokenCreate(subject string, secretFile string) error {
+func (cli *VanClient) ConnectorTokenCreate(subject string, secretFile string) error {
 	// verify that the transport is interior mode
 	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
