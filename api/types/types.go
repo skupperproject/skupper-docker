@@ -19,13 +19,15 @@ import (
 )
 
 const (
-	DefaultVanName   string = "skupper"
-	HostPath         string = "/tmp/skupper"
-	CertPath                = HostPath + "/qpid-dispatch-certs/"
-	ConnPath                = HostPath + "/connections/"
-	ConsoleUsersPath        = HostPath + "/console-users/"
-	SaslConfigPath          = HostPath + "/sasl-config/"
-	ServicePath             = HostPath + "/services/"
+	DefaultVanName    string = "skupper"
+	DefaultBridgeName string = "skupper0"
+	HostPath          string = "/tmp/skupper"
+	CertPath                 = HostPath + "/qpid-dispatch-certs/"
+	ConnPath                 = HostPath + "/connections/"
+	ConsoleUsersPath         = HostPath + "/console-users/"
+	SaslConfigPath           = HostPath + "/sasl-config/"
+	ServicePath              = HostPath + "/services/"
+	SitePath                 = HostPath + "/sites/"
 )
 
 // TransportMode describes how a qdr is intended to be deployed, either interior or edge
@@ -63,6 +65,13 @@ const (
 	ControllerContainerName  string = "service-controller"
 	DefaultProxyImage        string = "quay.io/skupper/proxy:0.3"
 	ControllerConfigPath     string = "/etc/messaging/"
+)
+
+// Skupper qualifiers
+const (
+	BaseQualifier    string = "skupper.io"
+	TokenGeneratedBy string = BaseQualifier + "/generated-by"
+	TokenCost        string = BaseQualifier + "/cost"
 )
 
 // Console constants

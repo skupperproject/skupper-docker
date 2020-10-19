@@ -9,6 +9,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
+	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/interconnectedcloud/go-amqp v0.12.6-0.20200506124159-f51e540008b5
 	github.com/morikuni/aec v1.0.0 // indirect

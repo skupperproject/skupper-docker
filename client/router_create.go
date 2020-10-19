@@ -76,11 +76,11 @@ func ensureCA(name string) (certs.CertificateData, error) {
 	return caData, nil
 }
 
-func GetRouterSpecFromOpts(options types.RouterCreateOptions, client *VanClient) (*types.RouterSpec, error) {
+func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId string) (*types.RouterSpec, error) {
 	van := &types.RouterSpec{}
 	//TODO: think througn van name, router name, secret names, etc.
 	if options.SkupperName == "" {
-		info, _ := client.DockerInterface.Info()
+		info, _ := cli.DockerInterface.Info()
 		van.Name = info.Name
 	} else {
 		van.Name = options.SkupperName
@@ -113,7 +113,6 @@ func GetRouterSpecFromOpts(options types.RouterCreateOptions, client *VanClient)
 	sslProfiles = append(sslProfiles, types.SslProfile{
 		Name: "skupper-amqps",
 	})
-	//TODO: vcabbage issue with EXTERNAL, requires ANONYMOUS,false
 	listeners = append(listeners, types.Listener{
 		Name:             "amqps",
 		Host:             "0.0.0.0",
@@ -122,21 +121,23 @@ func GetRouterSpecFromOpts(options types.RouterCreateOptions, client *VanClient)
 		SaslMechanisms:   "EXTERNAL",
 		AuthenticatePeer: false,
 	})
-	if van.AuthMode == types.ConsoleAuthModeInternal {
-		listeners = append(listeners, types.Listener{
-			Name:             types.ConsolePortName,
-			Host:             "0.0.0.0",
-			Port:             types.ConsoleDefaultServicePort,
-			Http:             true,
-			AuthenticatePeer: true,
-		})
-	} else if van.AuthMode == types.ConsoleAuthModeUnsecured {
-		listeners = append(listeners, types.Listener{
-			Name: types.ConsolePortName,
-			Host: "0.0.0.0",
-			Port: types.ConsoleDefaultServicePort,
-			Http: true,
-		})
+	if options.EnableRouterConsole {
+		if van.AuthMode == types.ConsoleAuthModeInternal {
+			listeners = append(listeners, types.Listener{
+				Name:             types.ConsolePortName,
+				Host:             "0.0.0.0",
+				Port:             types.ConsoleDefaultServicePort,
+				Http:             true,
+				AuthenticatePeer: true,
+			})
+		} else if van.AuthMode == types.ConsoleAuthModeUnsecured {
+			listeners = append(listeners, types.Listener{
+				Name: types.ConsolePortName,
+				Host: "0.0.0.0",
+				Port: types.ConsoleDefaultServicePort,
+				Http: true,
+			})
+		}
 	}
 	if !options.IsEdge {
 		sslProfiles = append(sslProfiles, types.SslProfile{
@@ -266,8 +267,8 @@ func GetRouterSpecFromOpts(options types.RouterCreateOptions, client *VanClient)
 		"skupper.io/component": types.ControllerComponentName,
 	}
 	van.Controller.EnvVar = []string{
+		"SKUPPER_SITE_ID=" + siteId,
 		"SKUPPER_PROXY_IMAGE=" + van.Controller.Image,
-		"SKUPPER_SERVICE_SYNC_ORIGIN=" + utils.RandomId(10),
 	}
 	van.Controller.Mounts = map[string]string{
 		types.CertPath + "skupper": "/etc/messaging",
@@ -279,7 +280,7 @@ func GetRouterSpecFromOpts(options types.RouterCreateOptions, client *VanClient)
 }
 
 // RouterCreate instantiates a VAN Router (transport and controller)
-func (cli *VanClient) RouterCreate(options types.RouterCreateOptions) error {
+func (cli *VanClient) RouterCreate(options types.SiteConfigSpec) error {
 	//TODO return error
 	if options.EnableConsole {
 		if options.AuthMode == string(types.ConsoleAuthModeInternal) || options.AuthMode == "" {
@@ -302,8 +303,22 @@ func (cli *VanClient) RouterCreate(options types.RouterCreateOptions) error {
 	}
 
 	// TODO check if resources already exist: either delete them all or error out
+	// setup host dirs
+	_ = os.RemoveAll(types.HostPath)
+	// create host dirs TODO this should not be here
+	if err := os.MkdirAll(types.HostPath, 0755); err != nil {
+		return err
+	}
+	if err := os.Mkdir(types.SitePath, 0755); err != nil {
+		return err
+	}
 
-	van, err := GetRouterSpecFromOpts(options, cli)
+	sc, err := cli.SiteConfigCreate(options)
+	if err != nil {
+		return err
+	}
+
+	van, err := cli.GetRouterSpecFromOpts(options, sc.UID)
 	if err != nil {
 		return err
 	}
@@ -318,12 +333,6 @@ func (cli *VanClient) RouterCreate(options types.RouterCreateOptions) error {
 		return err
 	}
 
-	// setup host dirs
-	_ = os.RemoveAll(types.HostPath)
-	// create host dirs TODO this should not be here
-	if err := os.MkdirAll(types.HostPath, 0755); err != nil {
-		return err
-	}
 	for mnt, _ := range van.Transport.Mounts {
 		if err := os.Mkdir(mnt, 0755); err != nil {
 			return err
