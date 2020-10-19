@@ -155,7 +155,7 @@ func silenceCobra(cmd *cobra.Command) {
 	cmd.SilenceUsage = true
 }
 
-var routerCreateOpts types.RouterCreateOptions
+var routerCreateOpts types.SiteConfigSpec
 
 func NewCmdInit(newClient cobraFunc) *cobra.Command {
 	cmd := &cobra.Command{
@@ -245,7 +245,12 @@ func NewCmdConnect(newClient cobraFunc) *cobra.Command {
 		PreRun: newClient,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			silenceCobra(cmd)
-			// TODO: get site config
+
+			_, err := cli.SiteConfigInspect(types.DefaultBridgeName)
+			if err != nil {
+				return fmt.Errorf("Unable to retrieve site config: %w", err)
+			}
+
 			name, err := cli.ConnectorCreate(args[0], connectorCreateOpts)
 			if err != nil {
 				return fmt.Errorf("Failed to create connection: %w", err)

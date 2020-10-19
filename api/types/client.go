@@ -5,13 +5,19 @@ type ConnectorCreateOptions struct {
 	Cost int32
 }
 
-type RouterCreateOptions struct {
+type SiteConfig struct {
+	Spec SiteConfigSpec
+	UID  string
+}
+
+type SiteConfigSpec struct {
 	SkupperName         string
+	SkupperNamespace    string
 	IsEdge              bool
 	EnableController    bool
 	EnableServiceSync   bool
-	EnableConsole       bool
 	EnableRouterConsole bool
+	EnableConsole       bool
 	AuthMode            string
 	User                string
 	Password            string
@@ -56,11 +62,12 @@ type VanClientInterface interface {
 	ConnectorList() ([]*Connector, error)
 	ConnectorRemove(name string) error
 	ConnectorTokenCreate(subject string, secretFile string) error
-	RouterCreate(options RouterCreateOptions) error
+	RouterCreate(options SiteConfigSpec) error
 	RouterInspect() (*RouterInspectResponse, error)
 	RouterRemove() []error
 	ServiceInterfaceCreate(targetType string, targetName string, options ServiceInterfaceCreateOptions) error
 	ServiceInterfaceInspect(address string) (*ServiceInterface, error)
 	ServiceInterfaceList() ([]ServiceInterface, error)
 	ServiceInterfaceRemove(targetType string, targetName string, options ServiceInterfaceRemoveOptions) error
+	SiteConfigInspect(name string) (*SiteConfig, error)
 }

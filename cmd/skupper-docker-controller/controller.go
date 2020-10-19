@@ -30,8 +30,7 @@ type Controller struct {
 	localServices   []types.ServiceInterface
 	byName          map[string]types.ServiceInterface
 	desiredServices map[string]types.ServiceInterface
-	//	proxies         map[string]*dockertypes.ContainerJSON
-	proxies map[string]dockertypes.Container
+	proxies         map[string]dockertypes.Container
 }
 
 func equivalentProxyConfig(desired types.ServiceInterface, env []string) bool {

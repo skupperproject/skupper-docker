@@ -46,6 +46,20 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		return "", fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
+	generatedBy, ok := secret["skupper.io/generated-by"]
+	if !ok {
+		return "", fmt.Errorf("Cannot find secret origin for token '%s'", secretFile)
+	}
+
+	sc, err := cli.SiteConfigInspect(types.DefaultBridgeName)
+	if err != nil {
+		return "", fmt.Errorf("Unable to retrieve site UUID: %w", err)
+	}
+
+	if sc.UID == string(generatedBy) {
+		return "", fmt.Errorf("Cannot create connection to self with token '%s'", secretFile)
+	}
+
 	mode := qdr.GetTransportMode(existing)
 
 	if options.Name == "" {
@@ -60,8 +74,14 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		return "", fmt.Errorf("Failed to create skupper connector directory: %w", err)
 	}
 	for k, v := range secret {
-		if err := ioutil.WriteFile(connPath+"/"+k, v, 0755); err != nil {
-			return "", fmt.Errorf("Failed to write connector certificate file: %w", err)
+		if k == types.TokenGeneratedBy {
+			if err := ioutil.WriteFile(connPath+"/generated-by", v, 0755); err != nil {
+				return "", fmt.Errorf("Failed to write connector file: %w", err)
+			}
+		} else {
+			if err := ioutil.WriteFile(connPath+"/"+k, v, 0755); err != nil {
+				return "", fmt.Errorf("Failed to write connector certificate file: %w", err)
+			}
 		}
 	}
 

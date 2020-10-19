@@ -74,7 +74,7 @@ func getTlsConfig(verify bool, cert, key, ca string) (*tls.Config, error) {
 }
 
 func main() {
-	origin := os.Getenv("SKUPPER_SERVICE_SYNC_ORIGIN")
+	siteId := os.Getenv("SKUPPER_SITE_ID")
 	endpoint := os.Getenv("SKUPPER_DOCKER_ENDPOINT")
 
 	// set up signals so we handle the first shutdown signal gracefully
@@ -90,7 +90,7 @@ func main() {
 		log.Fatal("Error getting van client: ", err.Error())
 	}
 
-	controller, err := NewController(cli, origin, tlsConfig)
+	controller, err := NewController(cli, siteId, tlsConfig)
 	if err != nil {
 		log.Fatal("Error getting new controller: ", err.Error())
 	}

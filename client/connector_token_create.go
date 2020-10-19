@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 
+	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
 	"github.com/skupperproject/skupper/pkg/certs"
@@ -29,6 +30,12 @@ func (cli *VanClient) ConnectorTokenCreate(subject string, secretFile string) er
 	annotations := make(map[string]string)
 	annotations["inter-router-port"] = "55671"
 	annotations["inter-router-host"] = ipAddr
+
+	sc, err := cli.SiteConfigInspect(types.DefaultBridgeName)
+	if err != nil {
+		return fmt.Errorf("Unable to retrieve site config data: %w", err)
+	}
+	annotations[types.TokenGeneratedBy] = sc.UID
 
 	// TODO err return from certs pkg
 	certData := certs.GenerateCertificateData(subject, subject, ipAddr, caData)

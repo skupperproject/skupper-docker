@@ -131,7 +131,7 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 		sender.Close(ctx)
 	}()
 
-	ticker := time.NewTicker(5 * time.Second)
+	tickerSend := time.NewTicker(5 * time.Second)
 
 	properties.Subject = "service-sync-update"
 	request.Properties = &properties
@@ -140,7 +140,7 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-tickerSend.C:
 			svcDefs, err := getServiceDefinitions("local")
 			if err != nil {
 				log.Println("Failed to retrieve skupper service definitions: ", err.Error())
