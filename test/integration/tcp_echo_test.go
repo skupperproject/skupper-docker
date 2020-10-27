@@ -52,6 +52,13 @@ func TestTcpEcho(t *testing.T) {
 	ip := current.NetworkSettings.Networks["skupper-network"].IPAddress
 	fmt.Printf("serviceIP = %s\n", ip)
 
-	err = tcp_echo.SendReceive(ip + ":9090")
+	for i := 0; i < 3; i++ {
+		//sendReceive fails after 1 minute maximum
+		err = tcp_echo.SendReceive(ip + ":9090")
+		if err == nil {
+			return
+		}
+		t.Logf("WARNING! try: %d failed!, retrying ...\n", i+1)
+	}
 	assert.Assert(t, err)
 }
