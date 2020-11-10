@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/skupperproject/skupper-docker/api/types"
@@ -24,131 +26,119 @@ func requiredArg(name string) func(*cobra.Command, []string) error {
 	}
 }
 
-func exposeTarget() func(*cobra.Command, []string) error {
-	return func(cmd *cobra.Command, args []string) error {
-		if len(args) < 1 {
-			return fmt.Errorf("expose type must be specified (e.g. 'skupper-docker expose container' or 'skupper-docker expose host-service')")
-		}
-		if args[0] == "container" && len(args) < 2 {
-			return fmt.Errorf("expose container target must be specified (e.g. 'skupper-docker expose container <name>'")
-		}
-		if args[0] == "container" && len(args) > 2 {
-			return fmt.Errorf("illegal argument for expose container: %s", args[2])
-		}
-		if args[0] == "host-service" && len(args) > 1 {
-			return fmt.Errorf("illegal argument for expose host-service: %s", args[1])
-		}
-		if args[0] != "container" && args[0] != "host-service" {
-			return fmt.Errorf("expose target type must be one of 'container', or 'host-service'")
-		}
-		return nil
+func parseTargetTypeAndName(args []string) (string, string) {
+	//this functions assumes it is called with the right arguments, wrong
+	//argument verification is done on the "Args:" functions
+	targetType := args[0]
+	targetName := ""
+	//	if strings.Contains(args[0], "container") {
+	if len(args) == 2 {
+		targetName = args[1]
+	} else if strings.Contains(args[0], "container") {
+		parts := strings.Split(args[0], "/")
+		targetType = parts[0]
+		targetName = parts[1]
 	}
+	//	}
+	return targetType, targetName
 }
 
-var unexposeOpts types.ServiceInterfaceRemoveOptions
+func expose(cli types.VanClientInterface, targetType string, targetName string, options types.ServiceInterfaceCreateOptions) error {
+	serviceName := options.Address
 
-func NewCmdUnexpose(newClient cobraFunc) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:    "unexpose [container <name>|host-service]",
-		Short:  "Unexpose container or host process previously exposed through a skupper address",
-		Args:   exposeTarget(),
-		PreRun: newClient,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			silenceCobra(cmd)
-
-			if args[0] == "container" {
-				err := cli.ServiceInterfaceRemove(args[0], args[1], unexposeOpts)
-				if err == nil {
-					fmt.Printf("%s %s unexposed\n", args[0], args[1])
-				} else {
-					return fmt.Errorf("Unable to unbind skupper service: %w", err)
-				}
-			}
-			if args[0] == "host-service" {
-				err := cli.ServiceInterfaceRemove(args[0], "", unexposeOpts)
-				if err == nil {
-					fmt.Printf("host-service %s unexposed\n", unexposeOpts.Address)
-				} else {
-					return fmt.Errorf("Unable to unbind skupper service: %w", err)
-				}
-			}
-			return nil
-		},
+	service, err := cli.ServiceInterfaceInspect(serviceName)
+	if err != nil {
+		return err
 	}
-	cmd.Flags().StringVar(&unexposeOpts.Address, "address", "", "Skupper address the target was exposed as")
 
-	return cmd
+	if service == nil {
+		service = &types.ServiceInterface{
+			Address:  serviceName,
+			Port:     options.Port,
+			Protocol: options.Protocol,
+		}
+	} else if options.Protocol != "" && service.Protocol != options.Protocol {
+		return fmt.Errorf("Invalid protocol %s for service with mapping %s", options.Protocol, service.Protocol)
+	}
+
+	// service may exist from remote origin
+	service.Origin = ""
+	err = cli.ServiceInterfaceBind(service, targetType, targetName, options.Protocol, options.TargetPort)
+	//	if errors.IsNotFound(err) {
+	//		return SkupperNotInstalledError(cli.GetNamespace())
+	if err != nil {
+		return fmt.Errorf("Unable to create skupper service: %w", err)
+	}
+	return nil
 }
 
-func NewCmdListExposed(newClient cobraFunc) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:    "list-exposed",
-		Short:  "List services exposed over the Skupper network",
-		Args:   cobra.NoArgs,
-		PreRun: newClient,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			silenceCobra(cmd)
-			vsis, err := cli.ServiceInterfaceList()
-			if err == nil {
-				if len(vsis) == 0 {
-					fmt.Println("No service interfaces defined")
-				} else {
-					fmt.Println("Services exposed through Skupper:")
-					for _, si := range vsis {
-						if len(si.Targets) == 0 {
-							fmt.Printf("    %s (%s port %d)", si.Address, si.Protocol, si.Port)
-							fmt.Println()
-						} else {
-							fmt.Printf("    %s (%s port %d) with targets", si.Address, si.Protocol, si.Port)
-							fmt.Println()
-							for _, t := range si.Targets {
-								var name string
-								if t.Name != "" {
-									name = fmt.Sprintf("name=%s", t.Name)
-								}
-								fmt.Printf("      => %s %s", t.Selector, name)
-								fmt.Println()
-							}
-						}
-					}
-					fmt.Println()
-					fmt.Println("Aliases for services exposed through Skupper:")
-					for _, si := range vsis {
-						fmt.Printf("    %s %s", si.Alias, si.Address)
-						fmt.Println()
-					}
-					fmt.Println()
-				}
-			} else {
-				return fmt.Errorf("Could not retrieve services: %w", err)
-			}
-			return nil
-		},
+func stringSliceContains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
 	}
-	return cmd
+	return false
 }
 
-func NewCmdVersion(newClient cobraFunc) *cobra.Command {
-	// TODO: change to inspect
-	cmd := &cobra.Command{
-		Use:    "version",
-		Short:  "Report the version of the Skupper CLI and services",
-		Args:   cobra.NoArgs,
-		PreRun: newClient,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			silenceCobra(cmd)
-			vir, err := cli.RouterInspect()
-			fmt.Printf("%-30s %s\n", "client version", version)
-			if err == nil {
-				fmt.Printf("%-30s %s\n", "transport version", vir.TransportVersion)
-				fmt.Printf("%-30s %s\n", "controller version", vir.ControllerVersion)
-			} else {
-				return fmt.Errorf("Unable to retrieve skupper component versions: %w", err)
-			}
-			return nil
-		},
+var validExposeTargets = []string{"container", "host-service"}
+
+func verifyTargetTypeFromArgs(args []string) error {
+	targetType, _ := parseTargetTypeAndName(args)
+	if !stringSliceContains(validExposeTargets, targetType) {
+		return fmt.Errorf("target type must be one of: [%s]", strings.Join(validExposeTargets, ", "))
 	}
-	return cmd
+	return nil
+}
+
+func exposeTargetArgs(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("expose type must be specified (e.g. 'skupper-docker expose container' or 'skupper-docker expose host-service')")
+	}
+	if args[0] == "container" {
+		if !strings.Contains(args[0], "/") && len(args) < 2 {
+			return fmt.Errorf("expose target and name must be specified (e.g. 'skupper expose container <name>'")
+		}
+		if len(args) > 1 && strings.Contains(args[0], "/") {
+			return fmt.Errorf("extra argument: %s", args[1])
+		}
+		if len(args) > 2 {
+			return fmt.Errorf("illegal argument: %s", args[2])
+		}
+	} else if args[0] == "host-service" {
+		if len(args) > 1 {
+			return fmt.Errorf("illegal argument: %s", args[1])
+		}
+	} else {
+		return fmt.Errorf("target type must be one of 'container', or 'host-service'")
+	}
+	return nil
+}
+
+func createServiceArgs(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 || (!strings.Contains(args[0], ":") && len(args) < 2) {
+		return fmt.Errorf("Name and port must be specified")
+	}
+	if len(args) > 2 {
+		return fmt.Errorf("illegal argument: %s", args[2])
+	}
+	if len(args) > 1 && strings.Contains(args[0], ":") {
+		return fmt.Errorf("extra argument: %s", args[1])
+	}
+	return nil
+}
+
+func bindArgs(cmd *cobra.Command, args []string) error {
+	if len(args) < 2 || (!strings.Contains(args[1], "/") && len(args) < 3) {
+		return fmt.Errorf("Service name, target type and target name must all be specified (e.g. 'skupper bind <service-name> <target-type> <target-name>')")
+	}
+	if len(args) > 3 {
+		return fmt.Errorf("illegal argument: %s", args[3])
+	}
+	if len(args) > 2 && strings.Contains(args[1], "/") {
+		return fmt.Errorf("extra argument: %s", args[2])
+	}
+	return verifyTargetTypeFromArgs(args[1:])
 }
 
 func silenceCobra(cmd *cobra.Command) {
@@ -184,6 +174,8 @@ installation that can then be connected to other skupper installations`,
 	cmd.Flags().StringVarP(&routerCreateOpts.AuthMode, "console-auth", "", "", "Authentication mode for console(s). One of: 'internal', 'unsecured'")
 	cmd.Flags().StringVarP(&routerCreateOpts.User, "console-user", "", "", "Router console user. Valid only when --console-auth=internal")
 	cmd.Flags().StringVarP(&routerCreateOpts.Password, "console-password", "", "", "Skupper console user. Valid only when --router-console-auth=internal")
+	cmd.Flags().BoolVarP(&routerCreateOpts.TraceLog, "enable-trace-log", "", false, "Enable router trace log")
+	cmd.Flags().MarkHidden("enable-trace-log")
 
 	return cmd
 }
@@ -440,37 +432,264 @@ var exposeOpts types.ServiceInterfaceCreateOptions
 
 func NewCmdExpose(newClient cobraFunc) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "expose [deployment <name>|pods <selector>|statefulset <statefulsetname>|service <name>]",
-		Short:  "Expose a set of pods through a Skupper address",
-		Args:   exposeTarget(),
+		Use:    "expose [container <name>|host-service]",
+		Short:  "Expose a service through a Skupper address",
+		Args:   exposeTargetArgs,
 		PreRun: newClient,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			silenceCobra(cmd)
 
-			if args[0] == "container" {
-				err := cli.ServiceInterfaceCreate(args[0], args[1], exposeOpts)
-				if err != nil {
-					return fmt.Errorf("Unable to expose container: %w", err)
-				} else {
-					fmt.Printf("%s %s exposed as %s\n", args[0], args[1], exposeOpts.Address)
+			targetType, targetName := parseTargetTypeAndName(args)
+
+			if exposeOpts.Address == "" {
+				if targetType == "host-service" {
+					return fmt.Errorf("--address option is required for target type 'service'")
 				}
+				exposeOpts.Address = targetName
 			}
-			if args[0] == "host-service" {
-				err := cli.ServiceInterfaceCreate(args[0], "", exposeOpts)
-				if err != nil {
-					return fmt.Errorf("Unable to expose container: %w", err)
-				} else {
-					fmt.Printf("%s exposed as %s\n", args[0], exposeOpts.Address)
-				}
+
+			err := expose(cli, targetType, targetName, exposeOpts)
+			if err == nil {
+				fmt.Printf("%s %s exposed as %s\n", targetType, targetName, exposeOpts.Address)
 			}
-			return nil
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&(exposeOpts.Protocol), "protocol", "tcp", "The protocol to proxy (tcp, http, or http2)")
 	cmd.Flags().StringVar(&(exposeOpts.Address), "address", "", "The Skupper address to expose")
 	cmd.Flags().IntVar(&(exposeOpts.Port), "port", 0, "The port to expose on")
-	cmd.Flags().IntVar(&(exposeOpts.TargetPort), "target-port", 0, "The port to target on container or process")
+	cmd.Flags().IntVar(&(exposeOpts.TargetPort), "target-port", 0, "The port to target on pods")
+	cmd.Flags().BoolVar(&(exposeOpts.Headless), "headless", false, "Expose through a headless service (valid only for a statefulset target)")
 
+	return cmd
+}
+
+var unexposeAddress string
+
+func NewCmdUnexpose(newClient cobraFunc) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "unexpose [container <name>|host-service <name>]",
+		Short:  "Unexpose a set of pods previously exposed through a Skupper address",
+		Args:   exposeTargetArgs,
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+
+			targetType, targetName := parseTargetTypeAndName(args)
+
+			if targetType == "host-service" && unexposeAddress == "" {
+				return fmt.Errorf("Unexpose host-service must specify address, use --address option to provide it")
+			}
+
+			err := cli.ServiceInterfaceUnbind(targetType, targetName, unexposeAddress, true)
+			if err == nil {
+				fmt.Printf("%s %s unexposed\n", targetType, targetName)
+			} else {
+				return fmt.Errorf("Unable to unbind skupper service: %w", err)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&unexposeAddress, "address", "", "Skupper address the target was exposed as")
+
+	return cmd
+}
+
+func NewCmdListExposed(newClient cobraFunc) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "list-exposed",
+		Short:  "List services exposed over the Skupper network",
+		Args:   cobra.NoArgs,
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+			vsis, err := cli.ServiceInterfaceList()
+			if err == nil {
+				if len(vsis) == 0 {
+					fmt.Println("No service interfaces defined")
+				} else {
+					fmt.Println("Services exposed through Skupper:")
+					for _, si := range vsis {
+						if len(si.Targets) == 0 {
+							fmt.Printf("    %s (%s port %d)", si.Address, si.Protocol, si.Port)
+							fmt.Println()
+						} else {
+							fmt.Printf("    %s (%s port %d) with targets", si.Address, si.Protocol, si.Port)
+							fmt.Println()
+							for _, t := range si.Targets {
+								var name string
+								if t.Name != "" {
+									name = fmt.Sprintf("name=%s", t.Name)
+								}
+								fmt.Printf("      => %s %s", t.Selector, name)
+								fmt.Println()
+							}
+						}
+					}
+					fmt.Println()
+					fmt.Println("Aliases for services exposed through Skupper:")
+					for _, si := range vsis {
+						fmt.Printf("    %s %s", si.Alias, si.Address)
+						fmt.Println()
+					}
+					fmt.Println()
+				}
+			} else {
+				return fmt.Errorf("Could not retrieve services: %w", err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func NewCmdService() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "service create <name> <port> or service delete port",
+		Short: "Manage skupper service definitions",
+	}
+	return cmd
+}
+
+var serviceToCreate types.ServiceInterface
+
+func NewCmdCreateService(newClient cobraFunc) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "create <name> <port>",
+		Short:  "Create a skupper service",
+		Args:   createServiceArgs,
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+			var sPort string
+			if len(args) == 1 {
+				parts := strings.Split(args[0], ":")
+				serviceToCreate.Address = parts[0]
+				sPort = parts[1]
+			} else {
+				serviceToCreate.Address = args[0]
+				sPort = args[1]
+			}
+			servicePort, err := strconv.Atoi(sPort)
+			if err != nil {
+				return fmt.Errorf("%s is not a valid port", sPort)
+			} else {
+				serviceToCreate.Port = servicePort
+				err = cli.ServiceInterfaceCreate(&serviceToCreate)
+				if err != nil {
+					return fmt.Errorf("%w", err)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&serviceToCreate.Protocol, "mapping", "tcp", "The mapping in use for this service address (currently one of tcp or http)")
+	cmd.Flags().StringVar(&serviceToCreate.Aggregate, "aggregate", "", "The aggregation strategy to use. One of 'json' or 'multipart'. If specified requests to this service will be sent to all registered implementations and the responses aggregated.")
+	cmd.Flags().BoolVar(&serviceToCreate.EventChannel, "event-channel", false, "If specified, this service will be a channel for multicast events.")
+
+	return cmd
+}
+
+func NewCmdDeleteService(newClient cobraFunc) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "delete <name>",
+		Short:  "Delete a skupper service",
+		Args:   cobra.ExactArgs(1),
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+			err := cli.ServiceInterfaceRemove(args[0])
+			if err != nil {
+				return fmt.Errorf("%w", err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+var targetPort int
+var protocol string
+
+func NewCmdBind(newClient cobraFunc) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "bind <service-name> <target-type> <target-name>",
+		Short:  "Bind a target to a service",
+		Args:   bindArgs,
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+			if protocol != "" && protocol != "tcp" && protocol != "http" && protocol != "http2" {
+				return fmt.Errorf("%s is not a valid protocol. Choose 'tcp', 'http' or 'http2'.", protocol)
+			} else {
+				targetType, targetName := parseTargetTypeAndName(args[1:])
+
+				service, err := cli.ServiceInterfaceInspect(args[0])
+
+				if err != nil {
+					return fmt.Errorf("%w", err)
+				} else if service == nil {
+					return fmt.Errorf("Service %s not found", args[0])
+				} else {
+					err = cli.ServiceInterfaceBind(service, targetType, targetName, protocol, targetPort)
+					if err != nil {
+						return fmt.Errorf("%w", err)
+					}
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&protocol, "protocol", "", "The protocol to proxy (tcp, http or http2).")
+	cmd.Flags().IntVar(&targetPort, "target-port", 0, "The port the target is listening on.")
+
+	return cmd
+}
+
+func NewCmdUnbind(newClient cobraFunc) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "unbind <service-name> <target-type> <target-name>",
+		Short:  "Unbind a target from a service",
+		Args:   bindArgs,
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+
+			targetType, targetName := parseTargetTypeAndName(args[1:])
+
+			fmt.Println("Cmd target type", targetType)
+			fmt.Println("Cmd target name", targetName)
+
+			err := cli.ServiceInterfaceUnbind(targetType, targetName, args[0], false)
+			if err != nil {
+				return fmt.Errorf("%w", err)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
+func NewCmdVersion(newClient cobraFunc) *cobra.Command {
+	// TODO: change to inspect
+	cmd := &cobra.Command{
+		Use:    "version",
+		Short:  "Report the version of the Skupper CLI and services",
+		Args:   cobra.NoArgs,
+		PreRun: newClient,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			silenceCobra(cmd)
+			vir, err := cli.RouterInspect()
+			fmt.Printf("%-30s %s\n", "client version", version)
+			if err == nil {
+				fmt.Printf("%-30s %s\n", "transport version", vir.TransportVersion)
+				fmt.Printf("%-30s %s\n", "controller version", vir.ControllerVersion)
+			} else {
+				return fmt.Errorf("Unable to retrieve skupper component versions: %w", err)
+			}
+			return nil
+		},
+	}
 	return cmd
 }
 
@@ -497,7 +716,15 @@ func init() {
 	cmdExpose := NewCmdExpose(newClient)
 	cmdUnexpose := NewCmdUnexpose(newClient)
 	cmdListExposed := NewCmdListExposed(newClient)
+	cmdCreateService := NewCmdCreateService(newClient)
+	cmdDeleteService := NewCmdDeleteService(newClient)
+	cmdBind := NewCmdBind(newClient)
+	cmdUnbind := NewCmdUnbind(newClient)
 	cmdVersion := NewCmdVersion(newClient)
+
+	cmdService := NewCmdService()
+	cmdService.AddCommand(cmdCreateService)
+	cmdService.AddCommand(cmdDeleteService)
 
 	rootCmd = &cobra.Command{Use: "skupper-docker"}
 	rootCmd.Version = version
@@ -512,6 +739,9 @@ func init() {
 		cmdExpose,
 		cmdUnexpose,
 		cmdListExposed,
+		cmdService,
+		cmdBind,
+		cmdUnbind,
 		cmdVersion)
 	rootCmd.PersistentFlags().StringVarP(&dockerEndpoint, "endpoint", "e", "", "docker endpoint to use")
 }

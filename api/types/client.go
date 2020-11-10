@@ -23,6 +23,7 @@ type SiteConfigSpec struct {
 	Password            string
 	ClusterLocal        bool
 	Replicas            int32
+	TraceLog            bool
 }
 
 type ServiceInterfaceCreateOptions struct {
@@ -31,10 +32,6 @@ type ServiceInterfaceCreateOptions struct {
 	Port       int
 	TargetPort int
 	Headless   bool
-}
-
-type ServiceInterfaceRemoveOptions struct {
-	Address string
 }
 
 type RouterInspectResponse struct {
@@ -65,9 +62,11 @@ type VanClientInterface interface {
 	RouterCreate(options SiteConfigSpec) error
 	RouterInspect() (*RouterInspectResponse, error)
 	RouterRemove() []error
-	ServiceInterfaceCreate(targetType string, targetName string, options ServiceInterfaceCreateOptions) error
+	ServiceInterfaceBind(service *ServiceInterface, targetType string, targetName string, protocol string, targetPort int) error
+	ServiceInterfaceCreate(service *ServiceInterface) error
 	ServiceInterfaceInspect(address string) (*ServiceInterface, error)
 	ServiceInterfaceList() ([]ServiceInterface, error)
-	ServiceInterfaceRemove(targetType string, targetName string, options ServiceInterfaceRemoveOptions) error
+	ServiceInterfaceRemove(address string) error
+	ServiceInterfaceUnbind(targetType string, targetName string, address string, deleteIfNoTargets bool) error
 	SiteConfigInspect(name string) (*SiteConfig, error)
 }

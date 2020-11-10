@@ -1,12 +1,10 @@
 package docker
 
 import (
+	"context"
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
@@ -16,7 +14,7 @@ import (
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
-	"github.com/skupperproject/skupper-docker/pkg/utils/configs"
+	skupperutils "github.com/skupperproject/skupper/pkg/utils"
 )
 
 func CreateContainer(opts *dockertypes.ContainerCreateConfig, dd libdocker.Interface) (*dockercontainer.ContainerCreateCreatedBody, error) {
@@ -52,16 +50,21 @@ func StartContainer(name string, dd libdocker.Interface) error {
 	return dd.StartContainer(name)
 }
 
+func WaitContainer(name string, dd libdocker.Interface) error {
+	return dd.WaitContainer(name, 10*time.Second)
+}
+
 // TODO: should skupper containers be here or in another package?
 
 func getLabels(service types.ServiceInterface, isLocal bool) map[string]string {
 	target := ""
 	targetType := "container"
 	if isLocal {
-		target = service.Targets[0].Name
-		if service.Targets[0].Selector == "internal.skupper.io/hostservice" {
-			targetType = "host"
-		}
+		//		target = service.Targets[0].Name
+		//		if service.Targets[0].Selector == "internal.skupper.io/hostservice" {
+		//			targetType = "host"
+		//		}
+		targetType = "host"
 	}
 
 	lastApplied, err := json.Marshal(service)
@@ -70,51 +73,47 @@ func getLabels(service types.ServiceInterface, isLocal bool) map[string]string {
 	}
 
 	return map[string]string{
-		"skupper.io/application":  "skupper-proxy",
-		"skupper.io/address":      service.Address,
-		"skupper.io/target":       target,
-		"skupper.io/targetType":   targetType,
-		"skupper.io/component":    "proxy",
-		"skupper.io/origin":       service.Origin,
-		"skupper.io/last-applied": string(lastApplied),
+		"skupper.io/application":      "skupper-proxy",
+		"skupper.io/address":          service.Address,
+		"skupper.io/target":           target,
+		"skupper.io/targetType":       targetType,
+		"skupper.io/component":        "proxy",
+		"internal.skupper.io/type":    "proxy",
+		"internal.skupper.io/service": service.Address,
+		"skupper.io/origin":           service.Origin,
+		"skupper.io/last-applied":     string(lastApplied),
 	}
 }
 
-func getProxyContainerCreateConfig(service types.ServiceInterface, isLocal bool) *dockertypes.ContainerCreateConfig {
+func getProxyContainerCreateConfig(service types.ServiceInterface, config string) *dockertypes.ContainerCreateConfig {
 	var imageName string
-	if os.Getenv("PROXY_IMAGE") != "" {
-		imageName = os.Getenv("PROXY_IMAGE")
+	if os.Getenv("QDROUTERD_IMAGE") != "" {
+		imageName = os.Getenv("QDROUTERD_IMAGE")
 	} else {
-		imageName = types.DefaultProxyImage
+		imageName = types.DefaultTransportImage
 	}
 
-	labels := getLabels(service, isLocal)
-	bridges := []string{}
-	env := []string{}
-
-	bridges = append(bridges, service.Protocol+":"+strconv.Itoa(int(service.Port))+"=>amqp:"+service.Address)
-	if isLocal {
-		bridges = append(bridges, "amqp:"+service.Address+"=>"+service.Protocol+":"+strconv.Itoa(int(service.Targets[0].TargetPort)))
-		env = append(env, "ICPROXY_BRIDGE_HOST="+service.Targets[0].Name)
+	labels := getLabels(service, true)
+	envVars := []string{}
+	envVars = append(envVars, "QDROUTERD_CONF="+config)
+	envVars = append(envVars, "QDROUTERD_CONF_TYPE=json")
+	envVars = append(envVars, "NAMESPACE=skupper")
+	if os.Getenv("PN_TRACE_FRM") != "" {
+		envVars = append(envVars, "PN_TRACE_FRM=1")
 	}
-	bridgeCfg := strings.Join(bridges, ",")
 
 	containerCfg := &dockercontainer.Config{
 		Hostname: service.Address,
 		Image:    imageName,
-		Cmd: []string{
-			"node",
-			"/opt/app-root/bin/simple.js",
-			bridgeCfg},
-		Env:    env,
-		Labels: labels,
+		Env:      envVars,
+		Labels:   labels,
 	}
 	hostCfg := &dockercontainer.HostConfig{
 		Mounts: []dockermounttypes.Mount{
 			{
 				Type:   dockermounttypes.TypeBind,
-				Source: types.CertPath + "skupper",
-				Target: "/etc/messaging",
+				Source: types.CertPath + "skupper-internal",
+				Target: "/etc/qpid-dispatch-certs/skupper-internal/",
 			},
 		},
 		Privileged: true,
@@ -135,10 +134,9 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, isLocal bool)
 	return opts
 }
 
-func NewProxyContainer(svcDef types.ServiceInterface, isLocal bool, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
-	opts := getProxyContainerCreateConfig(svcDef, isLocal)
+func NewProxyContainer(svcDef types.ServiceInterface, config string, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
+	opts := getProxyContainerCreateConfig(svcDef, config)
 
-	// TODO: where should create and start be, here or in up a
 	_, err := dd.CreateContainer(*opts)
 	if err != nil {
 		return nil, err
@@ -279,28 +277,6 @@ func RestartTransportContainer(dd libdocker.Interface) error {
 		Privileged: true,
 	}
 
-	// grab the env and add connectors to it, splice off current ones
-	currentEnv := current.Config.Env
-	pattern := "## Connectors: ##"
-	transportConf := FindEnvVar(currentEnv, types.TransportEnvConfig)
-	updated := strings.Split(transportConf, pattern)[0] + pattern
-
-	files, err := ioutil.ReadDir(types.ConnPath)
-	for _, f := range files {
-		connName := f.Name()
-		hostString, _ := ioutil.ReadFile(types.ConnPath + connName + "/inter-router-host")
-		portString, _ := ioutil.ReadFile(types.ConnPath + connName + "/inter-router-port")
-		connector := types.Connector{
-			Name: connName,
-			Host: string(hostString),
-			Port: string(portString),
-			Role: string(types.ConnectorRoleInterRouter),
-		}
-		updated += configs.ConnectorConfig(&connector)
-	}
-
-	newEnv := SetEnvVar(currentEnv, types.TransportEnvConfig, updated)
-
 	containerCfg := &dockercontainer.Config{
 		Hostname: current.Config.Hostname,
 		Image:    current.Config.Image,
@@ -310,7 +286,7 @@ func RestartTransportContainer(dd libdocker.Interface) error {
 		},
 		Labels:       current.Config.Labels,
 		ExposedPorts: current.Config.ExposedPorts,
-		Env:          newEnv,
+		Env:          current.Config.Env,
 	}
 
 	// remove current and create new container
@@ -395,4 +371,21 @@ func NewTransportContainer(van *types.RouterSpec, dd libdocker.Interface) (*dock
 		return nil, err
 	}
 	return opts, nil
+}
+
+func WaitForContainerStatus(name string, status string, timeout time.Duration, interval time.Duration, dd libdocker.Interface) (*dockertypes.ContainerJSON, error) {
+	var container *dockertypes.ContainerJSON
+	var err error
+
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	defer cancel()
+
+	err = skupperutils.RetryWithContext(ctx, interval, func() (bool, error) {
+		container, err = InspectContainer(name, dd)
+		if err != nil {
+			return false, nil
+		}
+		return container.State.Status == status, nil
+	})
+	return container, err
 }

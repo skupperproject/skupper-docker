@@ -143,6 +143,16 @@ func (d *skupDockerClient) StopContainer(id string, timeout time.Duration) error
 	return err
 }
 
+func (d *skupDockerClient) WaitContainer(id string, timeout time.Duration) error {
+	ctx, cancel := d.getTimeoutContext()
+	defer cancel()
+
+	_, errC := d.client.ContainerWait(ctx, "skupper-router", "")
+	if waitErr := <-errC; waitErr != nil {
+		return waitErr
+	}
+	return nil
+}
 func (d *skupDockerClient) RemoveContainer(id string, opts dockertypes.ContainerRemoveOptions) error {
 	ctx, cancel := d.getTimeoutContext()
 	defer cancel()

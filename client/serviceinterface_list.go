@@ -13,7 +13,13 @@ func (cli *VanClient) ServiceInterfaceList() ([]types.ServiceInterface, error) {
 	var vsis []types.ServiceInterface
 	svcDefs := make(map[string]types.ServiceInterface)
 
-	svcFile, err := ioutil.ReadFile(types.AllServiceDefsFile)
+	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
+	}
+
+	//	svcFile, err := ioutil.ReadFile(types.AllServiceDefsFile)
+	svcFile, err := ioutil.ReadFile(types.ServiceDefsFile)
 	if err != nil {
 		return vsis, err
 	}

@@ -18,6 +18,7 @@ type Interface interface {
 	StartContainer(id string) error
 	RestartContainer(id string, timeout time.Duration) error
 	StopContainer(id string, timeout time.Duration) error
+	WaitContainer(name string, timeout time.Duration) error
 	UpdateContainerResources(id string, updateConfig dockercontainer.UpdateConfig) error
 	RemoveContainer(id string, opts dockertypes.ContainerRemoveOptions) error
 	InspectImageByRef(imageRef string) (*dockertypes.ImageInspect, error)

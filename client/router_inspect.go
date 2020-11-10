@@ -28,7 +28,12 @@ func (cli *VanClient) RouterInspect() (*types.RouterInspectResponse, error) {
 	}
 	vir.ControllerVersion = fmt.Sprintf("%s (%s)", controller.Config.Image, controller.Image[:19])
 
-	vir.Status.Mode = string(qdr.GetTransportMode(transport))
+	routerConfig, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	if err != nil {
+		return vir, fmt.Errorf("Failed to retrieve router config: %w", err)
+	}
+	vir.Status.Mode = string(routerConfig.Metadata.Mode)
+
 	connected, err := qdr.GetConnectedSites(cli.DockerInterface)
 	for i := 0; i < 5 && err != nil; i++ {
 		time.Sleep(500 * time.Millisecond)

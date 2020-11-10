@@ -6,6 +6,7 @@ import (
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
+	"github.com/skupperproject/skupper-docker/pkg/qdr"
 )
 
 func (cli *VanClient) ConnectorRemove(name string) error {
@@ -15,10 +16,24 @@ func (cli *VanClient) ConnectorRemove(name string) error {
 		return fmt.Errorf("Failed to retrieve transport container: %w", err)
 	}
 
-	// TODO  should we check inf connector actually exists to indicate it is not found
-	err = os.RemoveAll(types.ConnPath + name)
+	current, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
 	if err != nil {
-		return fmt.Errorf("Failed to remove connector file contents: %w", err)
+		return fmt.Errorf("Failed to retrieve router config: %w", err)
+	}
+
+	found := current.RemoveConnector(name)
+	if found {
+		current.RemoveConnSslProfile(name)
+
+		err = os.RemoveAll(types.ConnPath + name)
+		if err != nil {
+			return fmt.Errorf("Failed to remove connector file contents: %w", err)
+		}
+
+		err = current.WriteToConfigFile(types.ConfigPath + "/qdrouterd.json")
+		if err != nil {
+			return fmt.Errorf("Failed to update router config file: %w", err)
+		}
 	}
 
 	err = docker.RestartTransportContainer(cli.DockerInterface)

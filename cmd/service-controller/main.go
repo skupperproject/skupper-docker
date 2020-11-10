@@ -9,9 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/client"
+	"github.com/skupperproject/skupper-docker/pkg/docker"
 )
 
 const (
@@ -93,6 +95,12 @@ func main() {
 	controller, err := NewController(cli, siteId, tlsConfig)
 	if err != nil {
 		log.Fatal("Error getting new controller: ", err.Error())
+	}
+
+	log.Println("Waiting for the Skupper router component to start")
+	_, err = docker.WaitForContainerStatus("skupper-router", "running", time.Second*180, time.Second*5, cli.DockerInterface)
+	if err != nil {
+		log.Fatal("Failed waiting for router to be running", err.Error())
 	}
 
 	// start the controller workers
