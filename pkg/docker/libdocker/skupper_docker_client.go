@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	//    "log"
 	"regexp"
 	"sync"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
+
 	// dockerimagetypes "github.com/docker/docker/api/types/image"
 	dockernetworktypes "github.com/docker/docker/api/types/network"
 	dockerapi "github.com/docker/docker/client"
@@ -635,8 +635,9 @@ func (d *skupDockerClient) CreateNetwork(id string) (dockertypes.NetworkCreateRe
 		CheckDuplicate: true,
 		Driver:         "bridge",
 		Options: map[string]string{
-			"com.docker.network.bridge.name":       "skupper0",
-			"com.docker.network.bridge.enable_icc": "true",
+			"com.docker.network.bridge.name":                 "skupper0",
+			"com.docker.network.bridge.enable_icc":           "true",
+			"com.docker.network.bridge.enable_ip_masquerade": "true",
 		},
 	})
 	if ctxErr := contextError(ctx); ctxErr != nil {

@@ -64,8 +64,7 @@ func expose(cli types.VanClientInterface, targetType string, targetName string, 
 	// service may exist from remote origin
 	service.Origin = ""
 	err = cli.ServiceInterfaceBind(service, targetType, targetName, options.Protocol, options.TargetPort)
-	//	if errors.IsNotFound(err) {
-	//		return SkupperNotInstalledError(cli.GetNamespace())
+
 	if err != nil {
 		return fmt.Errorf("Unable to create skupper service: %w", err)
 	}

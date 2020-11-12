@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -275,9 +276,16 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		"application":          types.ControllerDeploymentName,
 		"skupper.io/component": types.ControllerComponentName,
 	}
+	var skupperHost string
+	if runtime.GOOS == "linux" {
+		skupperHost = utils.GetInternalIP("docker0")
+	} else {
+		skupperHost = "host-gateway"
+	}
 	van.Controller.EnvVar = []string{
 		"SKUPPER_SITE_ID=" + siteId,
 		"SKUPPER_PROXY_IMAGE=" + van.Controller.Image,
+		"SKUPPER_HOST=" + skupperHost,
 	}
 	if options.TraceLog {
 		van.Controller.EnvVar = append(van.Controller.EnvVar, "PN_TRACE_FRM=1")

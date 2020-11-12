@@ -48,14 +48,10 @@ func getServiceInterfaceTarget(targetType string, targetName string, deducePort 
 			return nil, fmt.Errorf("Could not read container %s: %s", targetName, err)
 		}
 	} else if targetType == "host-service" {
-		hostIP := utils.GetInternalIP("docker0")
-		if hostIP == "" {
-			return nil, fmt.Errorf("Could not retrieve host service target network address")
-		}
 		target := types.ServiceInterfaceTarget{
 			Name:     targetName,
 			Selector: "host-service",
-			Service:  hostIP,
+			Service:  "host.docker.internal",
 		}
 		// TODO: is there any way to deduce a port for a host-service
 		return &target, nil

@@ -102,6 +102,14 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 		envVars = append(envVars, "PN_TRACE_FRM=1")
 	}
 
+	var host string
+	if os.Getenv("SKUPPER_HOST") != "" {
+		host = os.Getenv("SKUPPER_HOST")
+	} else {
+		// magic address
+		host = "172.17.0.1"
+	}
+
 	containerCfg := &dockercontainer.Config{
 		Hostname: service.Address,
 		Image:    imageName,
@@ -116,6 +124,7 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 				Target: "/etc/qpid-dispatch-certs/skupper-internal/",
 			},
 		},
+		ExtraHosts: []string{"host.docker.internal:" + host},
 		Privileged: true,
 	}
 	networkCfg := &dockernetworktypes.NetworkingConfig{
