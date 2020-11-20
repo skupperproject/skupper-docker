@@ -3,8 +3,10 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
@@ -85,7 +87,7 @@ func getLabels(service types.ServiceInterface, isLocal bool) map[string]string {
 	}
 }
 
-func getProxyContainerCreateConfig(service types.ServiceInterface, config string) *dockertypes.ContainerCreateConfig {
+func getProxyContainerCreateConfig(service types.ServiceInterface, config string, osType string) *dockertypes.ContainerCreateConfig {
 	var imageName string
 	if os.Getenv("QDROUTERD_IMAGE") != "" {
 		imageName = os.Getenv("QDROUTERD_IMAGE")
@@ -110,6 +112,19 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 		host = "172.17.0.1"
 	}
 
+	extraHosts := []string{}
+	for _, t := range service.Targets {
+		if t.Selector == "internal.skupper.io/host-service" {
+			parts := strings.SplitN(t.Name, ":", 2)
+			if len(parts) == 2 {
+				if osType == "linux" && parts[1] == "host-gateway" {
+					parts[1] = host
+				}
+				extraHosts = append(extraHosts, parts[0]+":"+parts[1])
+			}
+		}
+	}
+
 	containerCfg := &dockercontainer.Config{
 		Hostname: service.Address,
 		Image:    imageName,
@@ -124,7 +139,7 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 				Target: "/etc/qpid-dispatch-certs/skupper-internal/",
 			},
 		},
-		ExtraHosts: []string{"host.docker.internal:" + host},
+		ExtraHosts: extraHosts,
 		Privileged: true,
 	}
 	networkCfg := &dockernetworktypes.NetworkingConfig{
@@ -144,9 +159,13 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 }
 
 func NewProxyContainer(svcDef types.ServiceInterface, config string, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
-	opts := getProxyContainerCreateConfig(svcDef, config)
+	version, err := dd.ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+	opts := getProxyContainerCreateConfig(svcDef, config, version.Os)
 
-	_, err := dd.CreateContainer(*opts)
+	_, err = dd.CreateContainer(*opts)
 	if err != nil {
 		return nil, err
 	} else {
@@ -397,4 +416,19 @@ func WaitForContainerStatus(name string, status string, timeout time.Duration, i
 		return container.State.Status == status, nil
 	})
 	return container, err
+}
+
+func GetImageVersion(image string, dd libdocker.Interface) (string, error) {
+	iibd, err := dd.InspectImageByID(image)
+	if err != nil {
+		return "", err
+	}
+
+	digest := iibd.RepoDigests[0]
+	parts := strings.Split(digest, "@")
+	if len(parts) > 1 && len(parts[1]) >= 19 {
+		return fmt.Sprintf("%s (%s)", image, parts[1][:19]), nil
+	} else {
+		return fmt.Sprintf("%s", digest), nil
+	}
 }

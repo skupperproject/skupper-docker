@@ -227,6 +227,19 @@ func (d *skupDockerClient) ListImages(opts dockertypes.ImageListOptions) ([]dock
 	return images, nil
 }
 
+func (d *skupDockerClient) ServerVersion() (dockertypes.Version, error) {
+	ctx, cancel := d.getTimeoutContext()
+	defer cancel()
+	version, err := d.client.ServerVersion(ctx)
+	if ctxErr := contextError(ctx); ctxErr != nil {
+		return version, ctxErr
+	}
+	if err != nil {
+		return version, err
+	}
+	return version, nil
+}
+
 func base64EncodeAuth(auth dockertypes.AuthConfig) (string, error) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(auth); err != nil {

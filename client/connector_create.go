@@ -137,6 +137,7 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		return "", fmt.Errorf("Failed to re-start transport container: %w", err)
 	}
 
+	//	err = docker.RestartControllerContainer(cli.DockerInterface)
 	err = docker.RestartContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
 		return "", fmt.Errorf("Failed to re-start controller container: %w", err)

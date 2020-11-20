@@ -6,6 +6,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
+
 	//dockerimagetypes "github.com/docker/docker/api/types/image"
 	//dockernetworktypes "github.com/docker/docker/api/types/network"
 	dockerapi "github.com/docker/docker/client"
@@ -38,6 +39,7 @@ type Interface interface {
 	ConnectContainerToNetwork(id string, containerid string) error
 	DisconnectContainerFromNetwork(id string, containerid string, force bool) error
 	RemoveNetwork(id string) error
+	ServerVersion() (dockertypes.Version, error)
 }
 
 func getDockerClient(dockerEndpoint string) (*dockerapi.Client, error) {

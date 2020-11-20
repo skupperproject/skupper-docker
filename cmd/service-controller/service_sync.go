@@ -124,6 +124,10 @@ func (c *Controller) ensureServiceInterfaceDefinitions(origin string, serviceInt
 		}
 	}
 
+	if len(changed) == 0 && len(deleted) == 0 {
+		return
+	}
+
 	err := updateSkupperServices(changed, deleted, origin)
 	if err != nil {
 		log.Println("Failed to update service definitions: ", err.Error())

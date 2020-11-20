@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +14,28 @@ import (
 )
 
 var version = "undefined"
+
+func validateIPAddress(val string) (string, error) {
+	var ip = net.ParseIP(strings.TrimSpace(val))
+	if ip != nil {
+		return ip.String(), nil
+	}
+	return "", fmt.Errorf("%s is not an ip address", val)
+}
+
+func validateTargetHost(val string) (string, error) {
+	arr := strings.SplitN(val, ":", 2)
+	if len(arr) != 2 || len(arr[0]) == 0 {
+		return "", fmt.Errorf("Bad format for host-service target: %q", val)
+	}
+	// Skip IP addr validate for special "host-gateway" string
+	if arr[1] != "host-gateway" {
+		if _, err := validateIPAddress(arr[1]); err != nil {
+			return "", fmt.Errorf("invalid IP address for host-service: %q", arr[1])
+		}
+	}
+	return val, nil
+}
 
 func requiredArg(name string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
@@ -94,24 +117,16 @@ func exposeTargetArgs(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("expose type must be specified (e.g. 'skupper-docker expose container' or 'skupper-docker expose host-service')")
 	}
-	if args[0] == "container" {
-		if !strings.Contains(args[0], "/") && len(args) < 2 {
-			return fmt.Errorf("expose target and name must be specified (e.g. 'skupper expose container <name>'")
-		}
-		if len(args) > 1 && strings.Contains(args[0], "/") {
-			return fmt.Errorf("extra argument: %s", args[1])
-		}
-		if len(args) > 2 {
-			return fmt.Errorf("illegal argument: %s", args[2])
-		}
-	} else if args[0] == "host-service" {
-		if len(args) > 1 {
-			return fmt.Errorf("illegal argument: %s", args[1])
-		}
-	} else {
-		return fmt.Errorf("target type must be one of 'container', or 'host-service'")
+	if !strings.Contains(args[0], "/") && len(args) < 2 {
+		return fmt.Errorf("expose target and name must be specified (e.g. 'skupper expose container <name>'")
 	}
-	return nil
+	if len(args) > 2 {
+		return fmt.Errorf("illegal argument: %s", args[1])
+	}
+	if len(args) > 1 && strings.Contains(args[0], "/") {
+		return fmt.Errorf("extra argument: %s", args[1])
+	}
+	return verifyTargetTypeFromArgs(args)
 }
 
 func createServiceArgs(cmd *cobra.Command, args []string) error {
@@ -656,9 +671,6 @@ func NewCmdUnbind(newClient cobraFunc) *cobra.Command {
 
 			targetType, targetName := parseTargetTypeAndName(args[1:])
 
-			fmt.Println("Cmd target type", targetType)
-			fmt.Println("Cmd target name", targetName)
-
 			err := cli.ServiceInterfaceUnbind(targetType, targetName, args[0], false)
 			if err != nil {
 				return fmt.Errorf("%w", err)
@@ -670,7 +682,6 @@ func NewCmdUnbind(newClient cobraFunc) *cobra.Command {
 }
 
 func NewCmdVersion(newClient cobraFunc) *cobra.Command {
-	// TODO: change to inspect
 	cmd := &cobra.Command{
 		Use:    "version",
 		Short:  "Report the version of the Skupper CLI and services",

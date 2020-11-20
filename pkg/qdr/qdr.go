@@ -469,7 +469,7 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 		Name:       "uplink",
 		SslProfile: types.InterRouterProfile,
 		Host:       "skupper-router",
-		Port:       strconv.Itoa(int(types.InterRouterListenerPort)),
+		Port:       strconv.Itoa(int(types.EdgeListenerPort)),
 		Role:       RoleEdge,
 	})
 	config.AddListener(Listener{
@@ -492,14 +492,27 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 				Address: definition.Address,
 				SiteId:  siteId,
 			})
+
 			for _, t := range definition.Targets {
-				config.AddTcpConnector(TcpEndpoint{
-					Name:    "egress",
-					Host:    t.Service,
-					Port:    strconv.Itoa(port),
-					Address: definition.Address,
-					SiteId:  siteId,
-				})
+				if t.Selector == "internal.skupper.io/container" {
+					config.AddTcpConnector(TcpEndpoint{
+						Name:    "egress",
+						Host:    t.Name,
+						Port:    strconv.Itoa(port),
+						Address: definition.Address,
+						SiteId:  siteId,
+					})
+				} else if t.Selector == "internal.skupper.io/host-service" {
+					// todo: parse host from t.Name
+					thost := strings.Split(t.Name, ":")
+					config.AddTcpConnector(TcpEndpoint{
+						Name:    "egress",
+						Host:    thost[0],
+						Port:    strconv.Itoa(port),
+						Address: definition.Address,
+						SiteId:  siteId,
+					})
+				}
 			}
 		case "http":
 			config.AddHttpConnector(HttpEndpoint{

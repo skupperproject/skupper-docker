@@ -8,7 +8,6 @@ import (
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
-	"github.com/skupperproject/skupper-docker/pkg/utils"
 )
 
 func addTargetToServiceInterface(service *types.ServiceInterface, target *types.ServiceInterfaceTarget) {
@@ -35,11 +34,12 @@ func getServiceInterfaceTarget(targetType string, targetName string, deducePort 
 		if err == nil {
 			target := types.ServiceInterfaceTarget{
 				Name:     targetName,
-				Selector: targetType,
-				Service:  targetName,
+				Selector: "internal.skupper.io/container",
 			}
 			if deducePort {
 				if len(containerJSON.Config.ExposedPorts) > 0 {
+					//TODO get port from config
+					// a map of nat port sets, how to choose a port?
 					target.TargetPort = 9090
 				}
 			}
@@ -50,8 +50,7 @@ func getServiceInterfaceTarget(targetType string, targetName string, deducePort 
 	} else if targetType == "host-service" {
 		target := types.ServiceInterfaceTarget{
 			Name:     targetName,
-			Selector: "host-service",
-			Service:  "host.docker.internal",
+			Selector: "internal.skupper.io/host-service",
 		}
 		// TODO: is there any way to deduce a port for a host-service
 		return &target, nil
@@ -233,15 +232,8 @@ func (cli *VanClient) ServiceInterfaceUnbind(targetType string, targetName strin
 		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	if targetType == "container" {
+	if targetType == "container" || targetType == "host-service" {
 		err := removeServiceInterfaceTarget(address, targetName, deleteIfNoTargets, cli)
-		return err
-	} else if targetType == "host-service" {
-		hostIP := utils.GetInternalIP("docker0")
-		if hostIP == "" {
-			return fmt.Errorf("Could not retrieve host service target network address")
-		}
-		err := removeServiceInterfaceTarget(address, hostIP, deleteIfNoTargets, cli)
 		return err
 	} else {
 		return fmt.Errorf("Unsupported target type for service interface %s", targetType)
