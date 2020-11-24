@@ -492,21 +492,19 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 				Address: definition.Address,
 				SiteId:  siteId,
 			})
-
 			for _, t := range definition.Targets {
 				if t.Selector == "internal.skupper.io/container" {
 					config.AddTcpConnector(TcpEndpoint{
-						Name:    "egress",
+						Name:    "egress-" + t.Name,
 						Host:    t.Name,
 						Port:    strconv.Itoa(port),
 						Address: definition.Address,
 						SiteId:  siteId,
 					})
 				} else if t.Selector == "internal.skupper.io/host-service" {
-					// todo: parse host from t.Name
 					thost := strings.Split(t.Name, ":")
 					config.AddTcpConnector(TcpEndpoint{
-						Name:    "egress",
+						Name:    "egress-" + thost[0],
 						Host:    thost[0],
 						Port:    strconv.Itoa(port),
 						Address: definition.Address,
@@ -515,22 +513,64 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 				}
 			}
 		case "http":
-			config.AddHttpConnector(HttpEndpoint{
-				Name:    "egress",
+			config.AddHttpListener(HttpEndpoint{
+				Name:    "ingress",
 				Host:    host,
 				Port:    strconv.Itoa(port),
 				Address: definition.Address,
 				SiteId:  siteId,
 			})
+			for _, t := range definition.Targets {
+				if t.Selector == "internal.skupper.io/container" {
+					config.AddHttpConnector(HttpEndpoint{
+						Name:    "egress-" + t.Name,
+						Host:    t.Name,
+						Port:    strconv.Itoa(port),
+						Address: definition.Address,
+						SiteId:  siteId,
+					})
+				} else if t.Selector == "internal.skupper.io/host-service" {
+					thost := strings.Split(t.Name, ":")
+					config.AddHttpConnector(HttpEndpoint{
+						Name:    "egress-" + thost[0],
+						Host:    thost[0],
+						Port:    strconv.Itoa(port),
+						Address: definition.Address,
+						SiteId:  siteId,
+					})
+				}
+			}
 		case "http2":
-			config.AddHttpConnector(HttpEndpoint{
-				Name:            "egress",
+			config.AddHttpListener(HttpEndpoint{
+				Name:            "ingress",
 				Host:            host,
 				Port:            strconv.Itoa(port),
 				Address:         definition.Address,
 				ProtocolVersion: "HTTP/2.0",
 				SiteId:          siteId,
 			})
+			for _, t := range definition.Targets {
+				if t.Selector == "internal.skupper.io/container" {
+					config.AddHttpConnector(HttpEndpoint{
+						Name:            "egress-" + t.Name,
+						Host:            t.Name,
+						Port:            strconv.Itoa(port),
+						Address:         definition.Address,
+						ProtocolVersion: "HTTP/2.0",
+						SiteId:          siteId,
+					})
+				} else if t.Selector == "internal.skupper.io/host-service" {
+					thost := strings.Split(t.Name, ":")
+					config.AddHttpConnector(HttpEndpoint{
+						Name:            "egress-" + thost[0],
+						Host:            thost[0],
+						Port:            strconv.Itoa(port),
+						Address:         definition.Address,
+						ProtocolVersion: "HTTP/2.0",
+						SiteId:          siteId,
+					})
+				}
+			}
 		default:
 		}
 	} else {

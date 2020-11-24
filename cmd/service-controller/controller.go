@@ -94,6 +94,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) error {
 }
 
 func updateSkupperServices(changed []types.ServiceInterface, deleted []string, origin string) error {
+	if len(changed) == 0 && len(deleted) == 0 {
+		return nil
+	}
+
 	current := make(map[string]types.ServiceInterface)
 	file, err := ioutil.ReadFile("/etc/messaging/services/skupper-services")
 
@@ -143,13 +147,25 @@ func (c *Controller) ensureProxyFor(bindings *ServiceBindings) error {
 	_, exists := proxies[bindings.address]
 	serviceInterface := asServiceInterface(bindings)
 
-	if bindings.origin == "" && !exists {
+	if bindings.origin == "" {
+		//	if bindings.origin == "" && !exists {
+		attached := make(map[string]dockertypes.EndpointResource)
+		sn, err := docker.InspectNetwork(types.TransportNetworkName, c.vanClient.DockerInterface)
+		if err != nil {
+			return fmt.Errorf("Unable to retrieve skupper-network: %w", err)
+		}
+		for _, c := range sn.Containers {
+			attached[c.Name] = c
+		}
+
 		for _, t := range bindings.targets {
-			if t.selector == "container" {
-				fmt.Println("Attaching container to skupper network: ", t.service)
-				err := docker.ConnectContainerToNetwork(types.TransportNetworkName, t.service, c.vanClient.DockerInterface)
-				if err != nil {
-					log.Println("Failed to attach target container to skupper network: ", err.Error())
+			if t.selector == "internal.skupper.io/container" {
+				if _, ok := attached[t.name]; !ok {
+					fmt.Println("Attaching container to skupper network: ", t.service)
+					err := docker.ConnectContainerToNetwork(types.TransportNetworkName, t.name, c.vanClient.DockerInterface)
+					if err != nil {
+						log.Println("Failed to attach target container to skupper network: ", err.Error())
+					}
 				}
 			}
 		}
@@ -168,21 +184,38 @@ func (c *Controller) ensureProxyFor(bindings *ServiceBindings) error {
 			return fmt.Errorf("Failed to start proxy container: %w", err)
 		}
 	} else {
-		proxyContainer, err := docker.InspectContainer(bindings.address, c.vanClient.DockerInterface)
+		proxyContainer, err := docker.InspectContainer(serviceInterface.Address, c.vanClient.DockerInterface)
 		if err != nil {
-			return fmt.Errorf("Failed to inspect existing proxy container: %w", err)
+			return fmt.Errorf("Failed to retrieve current proxy container: %w", err)
 		}
-		fmt.Println("Todo: update proxy config for ", strings.TrimPrefix(proxyContainer.Name, "/"))
+		actualConfig := docker.FindEnvVar(proxyContainer.Config.Env, "QDROUTERD_CONF")
+		if actualConfig == "" || actualConfig != config {
+			log.Println("Updating proxy config for: ", serviceInterface.Address)
+			err := c.deleteProxy(serviceInterface.Address)
+			if err != nil {
+				return fmt.Errorf("Failed to delete proxy container: %w", err)
+			}
+			newProxyContainer, err := docker.NewProxyContainer(serviceInterface, config, c.vanClient.DockerInterface)
+			if err != nil {
+				return fmt.Errorf("Failed to re-create proxy container: %w", err)
+			}
+			err = docker.StartContainer(newProxyContainer.Name, c.vanClient.DockerInterface)
+			if err != nil {
+				return fmt.Errorf("Failed to start proxy container: %w", err)
+			}
+		}
 	}
 	return nil
 
 }
 
 func (c *Controller) deleteProxy(name string) error {
-	log.Println("Undeploying proxy: ", name)
-	docker.StopContainer(name, c.vanClient.DockerInterface)
-	docker.RemoveContainer(name, c.vanClient.DockerInterface)
-	return nil
+	err := docker.StopContainer(name, c.vanClient.DockerInterface)
+	if err != nil {
+		return err
+	}
+	err = docker.RemoveContainer(name, c.vanClient.DockerInterface)
+	return err
 }
 
 func (c *Controller) updateProxies() {
@@ -275,7 +308,6 @@ func (c *Controller) runServiceDefsWatcher() {
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				c.processServiceDefs()
 			}
-			return
 		}
 	}
 
