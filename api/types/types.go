@@ -21,7 +21,7 @@ import (
 const (
 	DefaultVanName    string = "skupper"
 	DefaultBridgeName string = "skupper0"
-	HostPath          string = "/tmp/skupper"
+	HostPath          string = "/var/tmp/skupper"
 	CertPath                 = HostPath + "/qpid-dispatch-certs/"
 	ConnPath                 = HostPath + "/connections/"
 	ConfigPath               = HostPath + "/config/"
@@ -45,14 +45,13 @@ const (
 const (
 	TransportDeploymentName string = "skupper-router"
 	TransportComponentName  string = "router"
-	//	DefaultTransportImage   string = "quay.io/interconnectedcloud/qdrouterd"
-	DefaultTransportImage  string = "quay.io/gordons/qdrouterd:0.4.0-alpha-1"
-	TransportContainerName string = "router"
-	TransportLivenessPort  int32  = 9090
-	TransportEnvConfig     string = "QDROUTERD_CONF"
-	TransportSaslConfig    string = "skupper-sasl-config"
-	TransportNetworkName   string = "skupper-network"
-	TransportConfigFile    string = "qdrouterd.json"
+	DefaultTransportImage   string = "quay.io/skupper/qdrouterd:0.4"
+	TransportContainerName  string = "router"
+	TransportLivenessPort   int32  = 9090
+	TransportEnvConfig      string = "QDROUTERD_CONF"
+	TransportSaslConfig     string = "skupper-sasl-config"
+	TransportNetworkName    string = "skupper-network"
+	TransportConfigFile     string = "qdrouterd.json"
 )
 
 var TransportPrometheusAnnotations = map[string]string{
@@ -61,10 +60,11 @@ var TransportPrometheusAnnotations = map[string]string{
 }
 
 // Controller constants
+// TODO: revert controller image
 const (
 	ControllerDeploymentName string = "skupper-service-controller"
 	ControllerComponentName  string = "controller"
-	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller"
+	DefaultControllerImage   string = "quay.io/ajssmith/skupper-docker-controller"
 	ControllerContainerName  string = "service-controller"
 	ControllerConfigPath     string = "/etc/messaging/"
 )

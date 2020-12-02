@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
+	"github.com/skupperproject/skupper-docker/pkg/utils"
 )
 
 func addTargetToServiceInterface(service *types.ServiceInterface, target *types.ServiceInterfaceTarget) {
@@ -48,8 +50,18 @@ func getServiceInterfaceTarget(targetType string, targetName string, deducePort 
 			return nil, fmt.Errorf("Could not read container %s: %s", targetName, err)
 		}
 	} else if targetType == "host-service" {
+		// add ip if not provided
+		name := targetName
+		arr := strings.SplitN(name, ":", 2)
+		if len(arr) == 1 {
+			host := utils.GetInternalIP("docker0")
+			if host == "" {
+				host = "172.17.0.1"
+			}
+			name = targetName + ":" + host
+		}
 		target := types.ServiceInterfaceTarget{
-			Name:     targetName,
+			Name:     name,
 			Selector: "internal.skupper.io/host-service",
 		}
 		// TODO: is there any way to deduce a port for a host-service
@@ -198,7 +210,20 @@ func removeServiceInterfaceTarget(serviceName string, targetName string, deleteI
 	targets := []types.ServiceInterfaceTarget{}
 
 	for _, t := range service.Targets {
-		if t.Name == targetName || (t.Name == "" && targetName == serviceName) {
+		name := targetName
+		if t.Selector == "internal.skupper.io/host-service" {
+			// add ip if not provided
+			arr := strings.SplitN(name, ":", 2)
+			if len(arr) == 1 {
+				// magic address
+				host := utils.GetInternalIP("docker0")
+				if host == "" {
+					host = "172.17.0.1"
+				}
+				name = targetName + ":" + host
+			}
+		}
+		if t.Name == name || (t.Name == "" && targetName == serviceName) {
 			modified = true
 		} else {
 			targets = append(targets, t)

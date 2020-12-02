@@ -16,13 +16,6 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/docker"
 )
 
-const (
-	ServiceSyncAddress  = "mc/$skupper-service-sync"
-	hostPath            = "/tmp/skupper"
-	skupperCertPath     = hostPath + "/qpid-dispatch-certs/"
-	skupperServicesPath = "/etc/messaging/services/"
-)
-
 func describe(i interface{}) {
 	fmt.Printf("(%v, %T)\n", i, i)
 	fmt.Println()

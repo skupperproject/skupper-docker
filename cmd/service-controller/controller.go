@@ -148,7 +148,6 @@ func (c *Controller) ensureProxyFor(bindings *ServiceBindings) error {
 	serviceInterface := asServiceInterface(bindings)
 
 	if bindings.origin == "" {
-		//	if bindings.origin == "" && !exists {
 		attached := make(map[string]dockertypes.EndpointResource)
 		sn, err := docker.InspectNetwork(types.TransportNetworkName, c.vanClient.DockerInterface)
 		if err != nil {

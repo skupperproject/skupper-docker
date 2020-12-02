@@ -478,9 +478,6 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 		Port: 5672,
 	})
 	port := definition.Port
-	if len(definition.Targets) == 1 && definition.Targets[0].TargetPort != 0 {
-		port = definition.Targets[0].TargetPort
-	}
 	if definition.Origin == "" {
 		host := definition.Address
 		switch definition.Protocol {
@@ -493,11 +490,15 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 				SiteId:  siteId,
 			})
 			for _, t := range definition.Targets {
+				tport := definition.Port
+				if t.TargetPort != 0 {
+					tport = t.TargetPort
+				}
 				if t.Selector == "internal.skupper.io/container" {
 					config.AddTcpConnector(TcpEndpoint{
 						Name:    "egress-" + t.Name,
 						Host:    t.Name,
-						Port:    strconv.Itoa(port),
+						Port:    strconv.Itoa(tport),
 						Address: definition.Address,
 						SiteId:  siteId,
 					})
@@ -506,7 +507,7 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 					config.AddTcpConnector(TcpEndpoint{
 						Name:    "egress-" + thost[0],
 						Host:    thost[0],
-						Port:    strconv.Itoa(port),
+						Port:    strconv.Itoa(tport),
 						Address: definition.Address,
 						SiteId:  siteId,
 					})
@@ -521,11 +522,15 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 				SiteId:  siteId,
 			})
 			for _, t := range definition.Targets {
+				tport := definition.Port
+				if t.TargetPort != 0 {
+					tport = t.TargetPort
+				}
 				if t.Selector == "internal.skupper.io/container" {
 					config.AddHttpConnector(HttpEndpoint{
 						Name:    "egress-" + t.Name,
 						Host:    t.Name,
-						Port:    strconv.Itoa(port),
+						Port:    strconv.Itoa(tport),
 						Address: definition.Address,
 						SiteId:  siteId,
 					})
@@ -534,7 +539,7 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 					config.AddHttpConnector(HttpEndpoint{
 						Name:    "egress-" + thost[0],
 						Host:    thost[0],
-						Port:    strconv.Itoa(port),
+						Port:    strconv.Itoa(tport),
 						Address: definition.Address,
 						SiteId:  siteId,
 					})
@@ -550,11 +555,15 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 				SiteId:          siteId,
 			})
 			for _, t := range definition.Targets {
+				tport := definition.Port
+				if t.TargetPort != 0 {
+					tport = t.TargetPort
+				}
 				if t.Selector == "internal.skupper.io/container" {
 					config.AddHttpConnector(HttpEndpoint{
 						Name:            "egress-" + t.Name,
 						Host:            t.Name,
-						Port:            strconv.Itoa(port),
+						Port:            strconv.Itoa(tport),
 						Address:         definition.Address,
 						ProtocolVersion: "HTTP/2.0",
 						SiteId:          siteId,
@@ -564,7 +573,7 @@ func GetRouterConfigForProxy(definition types.ServiceInterface, siteId string) (
 					config.AddHttpConnector(HttpEndpoint{
 						Name:            "egress-" + thost[0],
 						Host:            thost[0],
-						Port:            strconv.Itoa(port),
+						Port:            strconv.Itoa(tport),
 						Address:         definition.Address,
 						ProtocolVersion: "HTTP/2.0",
 						SiteId:          siteId,
