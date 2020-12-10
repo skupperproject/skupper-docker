@@ -38,7 +38,7 @@ func (cli *VanClient) RouterInspect() (*types.RouterInspectResponse, error) {
 		return vir, err
 	}
 
-	routerConfig, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	routerConfig, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return vir, fmt.Errorf("Failed to retrieve router config: %w", err)
 	}

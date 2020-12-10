@@ -16,7 +16,7 @@ func (cli *VanClient) ConnectorRemove(name string) error {
 		return fmt.Errorf("Failed to retrieve transport container: %w", err)
 	}
 
-	current, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve router config: %w", err)
 	}
@@ -25,12 +25,12 @@ func (cli *VanClient) ConnectorRemove(name string) error {
 	if found {
 		current.RemoveConnSslProfile(name)
 
-		err = os.RemoveAll(types.ConnPath + name)
+		err = os.RemoveAll(types.GetSkupperPath(types.ConnectionsPath) + "/" + name)
 		if err != nil {
 			return fmt.Errorf("Failed to remove connector file contents: %w", err)
 		}
 
-		err = current.WriteToConfigFile(types.ConfigPath + "/qdrouterd.json")
+		err = current.WriteToConfigFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 		if err != nil {
 			return fmt.Errorf("Failed to update router config file: %w", err)
 		}

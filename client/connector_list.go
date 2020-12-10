@@ -17,12 +17,12 @@ func (cli *VanClient) ConnectorList() ([]*types.Connector, error) {
 		return connectors, fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
-	current, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return connectors, fmt.Errorf("Failed to retrieve router config: %w", err)
 	}
 
-	files, err := ioutil.ReadDir(types.ConnPath)
+	files, err := ioutil.ReadDir(types.GetSkupperPath(types.ConnectionsPath))
 	if err != nil {
 		return connectors, fmt.Errorf("Failed to read connector definitions: %w", err)
 	}
@@ -40,8 +40,9 @@ func (cli *VanClient) ConnectorList() ([]*types.Connector, error) {
 	}
 
 	for _, f := range files {
-		host, _ = ioutil.ReadFile(types.ConnPath + f.Name() + suffix + "host")
-		port, _ = ioutil.ReadFile(types.ConnPath + f.Name() + suffix + "port")
+		path := types.GetSkupperPath(types.ConnectionsPath)
+		host, _ = ioutil.ReadFile(path + "/" + f.Name() + suffix + "host")
+		port, _ = ioutil.ReadFile(path + "/" + f.Name() + suffix + "port")
 		connectors = append(connectors, &types.Connector{
 			Name: f.Name(),
 			Host: string(host),

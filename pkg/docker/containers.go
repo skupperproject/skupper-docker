@@ -97,6 +97,7 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 
 	labels := getLabels(service, true)
 	envVars := []string{}
+	envVars = append(envVars, os.Getenv("SKUPPER_TMPDIR"))
 	envVars = append(envVars, "QDROUTERD_CONF="+config)
 	envVars = append(envVars, "QDROUTERD_CONF_TYPE=json")
 	envVars = append(envVars, "NAMESPACE=skupper")
@@ -135,7 +136,7 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 		Mounts: []dockermounttypes.Mount{
 			{
 				Type:   dockermounttypes.TypeBind,
-				Source: types.CertPath + "skupper-internal",
+				Source: types.GetSkupperPath(types.CertsPath) + "/" + "skupper-internal",
 				Target: "/etc/qpid-dispatch-certs/skupper-internal/",
 			},
 		},

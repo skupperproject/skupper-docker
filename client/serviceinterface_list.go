@@ -18,8 +18,7 @@ func (cli *VanClient) ServiceInterfaceList() ([]types.ServiceInterface, error) {
 		return nil, fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	//	svcFile, err := ioutil.ReadFile(types.AllServiceDefsFile)
-	svcFile, err := ioutil.ReadFile(types.ServiceDefsFile)
+	svcFile, err := ioutil.ReadFile(types.GetSkupperPath(types.ServicesPath) + "/skupper-services")
 	if err != nil {
 		return vsis, err
 	}

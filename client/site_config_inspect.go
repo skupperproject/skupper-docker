@@ -11,7 +11,7 @@ import (
 func (cli *VanClient) SiteConfigInspect(name string) (*types.SiteConfig, error) {
 	sc := &types.SiteConfig{}
 
-	scFile, err := ioutil.ReadFile(types.SitePath + name + ".json")
+	scFile, err := ioutil.ReadFile(types.GetSkupperPath(types.SitesPath) + name + ".json")
 	if err != nil {
 		return nil, err
 	}

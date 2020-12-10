@@ -20,7 +20,7 @@ func (cli *VanClient) ConnectorInspect(name string) (*types.ConnectorInspectResp
 		return vci, fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
-	current, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return vci, fmt.Errorf("Failed to retrieve router config: %w", err)
 	}
@@ -33,11 +33,11 @@ func (cli *VanClient) ConnectorInspect(name string) (*types.ConnectorInspectResp
 		suffix = "/inter-router-"
 	}
 
-	host, err := ioutil.ReadFile(types.ConnPath + name + suffix + "host")
+	host, err := ioutil.ReadFile(types.GetSkupperPath(types.ConnectionsPath) + "/" + name + suffix + "host")
 	if err != nil {
 		return vci, fmt.Errorf("Could not retrieve connection-token files: %w", err)
 	}
-	port, err := ioutil.ReadFile(types.ConnPath + name + suffix + "port")
+	port, err := ioutil.ReadFile(types.GetSkupperPath(types.ConnectionsPath) + "/" + name + suffix + "port")
 	if err != nil {
 		return vci, fmt.Errorf("Could not retrieve connection-token files: %w", err)
 	}

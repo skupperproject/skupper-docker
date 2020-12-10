@@ -756,6 +756,10 @@ func init() {
 }
 
 func main() {
+	if _, ok := os.LookupEnv("SKUPPER_TMPDIR"); !ok {
+		os.Setenv("SKUPPER_TMPDIR", "/var/tmp")
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

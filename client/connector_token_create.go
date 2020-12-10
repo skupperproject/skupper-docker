@@ -16,7 +16,7 @@ func (cli *VanClient) ConnectorTokenCreate(subject string, secretFile string) er
 		return fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
-	current, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve router config: %w", err)
 	}

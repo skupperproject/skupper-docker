@@ -24,7 +24,7 @@ import (
 
 func getCertData(name string) (certs.CertificateData, error) {
 	certData := certs.CertificateData{}
-	certPath := types.CertPath + name
+	certPath := types.GetSkupperPath(types.CertsPath) + "/" + name
 
 	files, err := ioutil.ReadDir(certPath)
 	if err == nil {
@@ -45,14 +45,14 @@ func generateCredentials(ca string, name string, subject string, hosts []string,
 	certData := certs.GenerateCertificateData(name, subject, strings.Join(hosts, ","), caData)
 
 	for k, v := range certData {
-		if err := ioutil.WriteFile(types.CertPath+name+"/"+k, v, 0755); err != nil {
+		if err := ioutil.WriteFile(types.GetSkupperPath(types.CertsPath)+"/"+name+"/"+k, v, 0755); err != nil {
 			return fmt.Errorf("Failed to write certificate file: %w", err)
 		}
 	}
 
 	if includeConnectJson {
 		certData["connect.json"] = []byte(configs.ConnectJSON())
-		if err := ioutil.WriteFile(types.CertPath+name+"/connect.json", []byte(configs.ConnectJSON()), 0755); err != nil {
+		if err := ioutil.WriteFile(types.GetSkupperPath(types.CertsPath)+"/"+name+"/connect.json", []byte(configs.ConnectJSON()), 0755); err != nil {
 			return fmt.Errorf("Failed to write connect file: %w", err)
 		}
 	}
@@ -65,12 +65,12 @@ func ensureCA(name string) (certs.CertificateData, error) {
 	// check if existing by looking at path/dir, if not create dir to persist
 	caData := certs.GenerateCACertificateData(name, name)
 
-	if err := os.Mkdir(types.CertPath+name, 0755); err != nil {
+	if err := os.Mkdir(types.GetSkupperPath(types.CertsPath)+"/"+name, 0755); err != nil {
 		return nil, fmt.Errorf("Failed to create certificate directory: %w", err)
 	}
 
 	for k, v := range caData {
-		if err := ioutil.WriteFile(types.CertPath+name+"/"+k, v, 0755); err != nil {
+		if err := ioutil.WriteFile(types.GetSkupperPath(types.CertsPath)+"/"+name+"/"+k, v, 0755); err != nil {
 			return nil, fmt.Errorf("Failed to write CA certificate file: %w", err)
 		}
 	}
@@ -223,11 +223,11 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 
 	// Note: use index to make directory, use index/value to make mount
 	mounts := make(map[string]string)
-	mounts[types.CertPath] = "/etc/qpid-dispatch-certs"
-	mounts[types.ConnPath] = "/etc/qpid-dispatch/connections"
-	mounts[types.ConfigPath] = "/etc/qpid-dispatch/config"
-	mounts[types.ConsoleUsersPath] = "/etc/qpid-dispatch/sasl-users/"
-	mounts[types.SaslConfigPath] = "/etc/sasl2"
+	mounts[types.GetSkupperPath(types.CertsPath)] = "/etc/qpid-dispatch-certs"
+	mounts[types.GetSkupperPath(types.ConnectionsPath)] = "/etc/qpid-dispatch/connections"
+	mounts[types.GetSkupperPath(types.ConfigPath)] = "/etc/qpid-dispatch/config"
+	mounts[types.GetSkupperPath(types.ConsoleUsersPath)] = "/etc/qpid-dispatch/sasl-users/"
+	mounts[types.GetSkupperPath(types.SaslConfigPath)] = "/etc/sasl2"
 	van.Transport.Mounts = mounts
 
 	cas := []types.CertAuthority{}
@@ -284,6 +284,7 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 	}
 	van.Controller.EnvVar = []string{
 		"SKUPPER_SITE_ID=" + siteId,
+		"SKUPPER_TMPDIR=" + os.Getenv("SKUPPER_TMPDIR"),
 		"SKUPPER_PROXY_IMAGE=" + van.Controller.Image,
 		"SKUPPER_HOST=" + skupperHost,
 	}
@@ -291,9 +292,9 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		van.Controller.EnvVar = append(van.Controller.EnvVar, "PN_TRACE_FRM=1")
 	}
 	van.Controller.Mounts = map[string]string{
-		types.CertPath + "skupper": "/etc/messaging",
-		types.ServicePath:          "/etc/messaging/services",
-		"/var/run":                 "/var/run",
+		types.GetSkupperPath(types.CertsPath) + "/" + "skupper": "/etc/messaging",
+		types.GetSkupperPath(types.ServicesPath):                "/etc/messaging/services",
+		"/var/run":                                              "/var/run",
 	}
 
 	return van, nil
@@ -324,12 +325,12 @@ func (cli *VanClient) RouterCreate(options types.SiteConfigSpec) error {
 
 	// TODO check if resources already exist: either delete them all or error out
 	// setup host dirs
-	_ = os.RemoveAll(types.HostPath)
+	_ = os.RemoveAll(types.GetSkupperPath(types.HostPath))
 	// create host dirs TODO this should not be here
-	if err := os.MkdirAll(types.HostPath, 0755); err != nil {
+	if err := os.MkdirAll(types.GetSkupperPath(types.HostPath), 0755); err != nil {
 		return err
 	}
-	if err := os.Mkdir(types.SitePath, 0755); err != nil {
+	if err := os.Mkdir(types.GetSkupperPath(types.SitesPath), 0755); err != nil {
 		return err
 	}
 
@@ -359,13 +360,13 @@ func (cli *VanClient) RouterCreate(options types.SiteConfigSpec) error {
 		}
 	}
 	for _, v := range van.Transport.Volumes {
-		if err := os.Mkdir(types.CertPath+v, 0755); err != nil {
+		if err := os.Mkdir(types.GetSkupperPath(types.CertsPath)+"/"+v, 0755); err != nil {
 			return err
 		}
 	}
 
 	// this one is needed by the controller
-	if err := os.Mkdir(types.ServicePath, 0755); err != nil {
+	if err := os.Mkdir(types.GetSkupperPath(types.ServicesPath), 0755); err != nil {
 		return err
 	}
 	// create skupper-services file
@@ -374,14 +375,14 @@ func (cli *VanClient) RouterCreate(options types.SiteConfigSpec) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(types.ServiceDefsFile, encoded, 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ServicesPath)+"/skupper-services", encoded, 0755)
 	if err != nil {
 		return err
 	}
 
 	// write qdrouterd configs
 
-	err = ioutil.WriteFile(types.ConfigPath+"/qdrouterd.json", []byte(van.RouterConfig), 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ConfigPath)+"/qdrouterd.json", []byte(van.RouterConfig), 0755)
 	if err != nil {
 		return err
 	}
@@ -391,11 +392,11 @@ pwcheck_method: auxprop
 auxprop_plugin: sasldb
 sasldb_path: /tmp/qdrouterd.sasldb
 `
-		err := ioutil.WriteFile(types.SaslConfigPath+"/qdrouterd.conf", []byte(config), 0755)
+		err := ioutil.WriteFile(types.GetSkupperPath(types.SaslConfigPath)+"/qdrouterd.conf", []byte(config), 0755)
 		if err != nil {
 			return err
 		}
-		err = ioutil.WriteFile(types.ConsoleUsersPath+"/"+options.User, []byte(options.Password), 0755)
+		err = ioutil.WriteFile(types.GetSkupperPath(types.ConsoleUsersPath)+"/"+options.User, []byte(options.Password), 0755)
 		if err != nil {
 			return err
 		}

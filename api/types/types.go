@@ -15,21 +15,44 @@ limitations under the License.
 package types
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/docker/go-connections/nat"
 )
 
 const (
 	DefaultVanName    string = "skupper"
 	DefaultBridgeName string = "skupper0"
-	HostPath          string = "/var/tmp/skupper"
-	CertPath                 = HostPath + "/qpid-dispatch-certs/"
-	ConnPath                 = HostPath + "/connections/"
-	ConfigPath               = HostPath + "/config/"
-	ConsoleUsersPath         = HostPath + "/console-users/"
-	SaslConfigPath           = HostPath + "/sasl-config/"
-	ServicePath              = HostPath + "/services/"
-	SitePath                 = HostPath + "/sites/"
 )
+
+type Path int
+
+const (
+	HostPath Path = iota
+	CertsPath
+	ConnectionsPath
+	ConfigPath
+	ConsoleUsersPath
+	SaslConfigPath
+	ServicesPath
+	SitesPath
+)
+
+var skupperPaths = map[Path]string{
+	HostPath:         "",
+	CertsPath:        "qpid-dispatch-certs",
+	ConnectionsPath:  "connections",
+	ConfigPath:       "config",
+	ConsoleUsersPath: "console-users",
+	SaslConfigPath:   "sasl-config",
+	ServicesPath:     "services",
+	SitesPath:        "sites",
+}
+
+func GetSkupperPath(p Path) string {
+	return filepath.Join(os.Getenv("SKUPPER_TMPDIR"), "skupper", skupperPaths[p])
+}
 
 // TransportMode describes how a qdr is intended to be deployed, either interior or edge
 type TransportMode string
@@ -64,7 +87,7 @@ var TransportPrometheusAnnotations = map[string]string{
 const (
 	ControllerDeploymentName string = "skupper-service-controller"
 	ControllerComponentName  string = "controller"
-	DefaultControllerImage   string = "quay.io/ajssmith/skupper-docker-controller"
+	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller:0.4"
 	ControllerContainerName  string = "service-controller"
 	ControllerConfigPath     string = "/etc/messaging/"
 )
@@ -111,7 +134,6 @@ const (
 // Controller Service Interface constants
 const (
 	ServiceSyncAddress = "mc/$skupper-service-sync"
-	ServiceDefsFile    = ServicePath + "/skupper-services"
 )
 
 // TODO: what is possiblity of using types from skupper itself (e.g. no namespace for docker

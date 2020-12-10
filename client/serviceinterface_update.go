@@ -74,7 +74,7 @@ func getServiceInterfaceTarget(targetType string, targetName string, deducePort 
 func updateServiceInterface(service *types.ServiceInterface, overwriteIfExists bool, cli *VanClient) error {
 	current := make(map[string]types.ServiceInterface)
 
-	svcFile, err := ioutil.ReadFile(types.ServiceDefsFile)
+	svcFile, err := ioutil.ReadFile(types.GetSkupperPath(types.ServicesPath) + "/skupper-services")
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve skupper service interace definitions: %w", err)
 	}
@@ -94,7 +94,7 @@ func updateServiceInterface(service *types.ServiceInterface, overwriteIfExists b
 		return fmt.Errorf("Failed to encode json for service interface: %w", err)
 	}
 
-	err = ioutil.WriteFile(types.ServiceDefsFile, encoded, 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ServicesPath)+"/skupper-services", encoded, 0755)
 	if err != nil {
 		return fmt.Errorf("Failed to write service interface file: %w", err)
 	}
@@ -191,7 +191,7 @@ func removeServiceInterfaceTarget(serviceName string, targetName string, deleteI
 		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	svcFile, err := ioutil.ReadFile(types.ServiceDefsFile)
+	svcFile, err := ioutil.ReadFile(types.GetSkupperPath(types.ServicesPath) + "/skupper-services")
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve skupper service interace definitions: %w", err)
 	}
@@ -244,7 +244,7 @@ func removeServiceInterfaceTarget(serviceName string, targetName string, deleteI
 		return fmt.Errorf("Failed to encode json for service interface: %w", err)
 	}
 
-	err = ioutil.WriteFile(types.ServiceDefsFile, encoded, 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ServicesPath)+"/skupper-services", encoded, 0755)
 	if err != nil {
 		return fmt.Errorf("Failed to write service interface file: %w", err)
 	}

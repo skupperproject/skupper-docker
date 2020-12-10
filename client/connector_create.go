@@ -77,12 +77,12 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 	}
 
 	if options.Name == "" {
-		options.Name, err = generateConnectorName(types.ConnPath)
+		options.Name, err = generateConnectorName(types.GetSkupperPath(types.ConnectionsPath))
 		if err != nil {
 			return "", err
 		}
 	}
-	connPath := types.ConnPath + options.Name
+	connPath := types.GetSkupperPath(types.ConnectionsPath) + "/" + options.Name
 
 	if err := os.Mkdir(connPath, 0755); err != nil {
 		return "", fmt.Errorf("Failed to create skupper connector directory: %w", err)
@@ -99,7 +99,7 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		}
 	}
 
-	current, err := qdr.GetRouterConfigFromFile(types.ConfigPath + "/qdrouterd.json")
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return "", fmt.Errorf("Failed to retrieve router config: %w", err)
 	}
@@ -127,7 +127,7 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		connector.Role = qdr.RoleInterRouter
 	}
 	current.AddConnector(connector)
-	err = current.WriteToConfigFile(types.ConfigPath + "/qdrouterd.json")
+	err = current.WriteToConfigFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
 	if err != nil {
 		return "", fmt.Errorf("Failed to update router config file: %w", err)
 	}

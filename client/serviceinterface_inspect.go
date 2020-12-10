@@ -17,8 +17,7 @@ func (cli *VanClient) ServiceInterfaceInspect(address string) (*types.ServiceInt
 		return nil, fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	//	svcFile, err := ioutil.ReadFile(types.AllServiceDefsFile)
-	svcFile, err := ioutil.ReadFile(types.ServiceDefsFile)
+	svcFile, err := ioutil.ReadFile(types.GetSkupperPath(types.ServicesPath) + "/skupper-services")
 	if err != nil {
 		return nil, err
 	}

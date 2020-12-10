@@ -17,8 +17,7 @@ func (cli *VanClient) ServiceInterfaceRemove(address string) error {
 		return fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
 
-	//	svcFile, err := ioutil.ReadFile(types.LocalServiceDefsFile)
-	svcFile, err := ioutil.ReadFile(types.ServiceDefsFile)
+	svcFile, err := ioutil.ReadFile(types.GetSkupperPath(types.ServicesPath) + "/skupper-services")
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve skupper service interace definitions: %w", err)
 	}
@@ -38,8 +37,7 @@ func (cli *VanClient) ServiceInterfaceRemove(address string) error {
 		return fmt.Errorf("Failed to encode json for service interface: %w", err)
 	}
 
-	//	err = ioutil.WriteFile(types.LocalServiceDefsFile, encoded, 0755)
-	err = ioutil.WriteFile(types.ServiceDefsFile, encoded, 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ServicesPath)+"/skupper-services", encoded, 0755)
 	if err != nil {
 		return fmt.Errorf("Failed to write service interface file: %w", err)
 	}
