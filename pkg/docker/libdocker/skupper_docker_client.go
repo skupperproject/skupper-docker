@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	//    "log"
 	"regexp"
 	"sync"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
+
 	// dockerimagetypes "github.com/docker/docker/api/types/image"
 	dockernetworktypes "github.com/docker/docker/api/types/network"
 	dockerapi "github.com/docker/docker/client"
@@ -143,6 +143,16 @@ func (d *skupDockerClient) StopContainer(id string, timeout time.Duration) error
 	return err
 }
 
+func (d *skupDockerClient) WaitContainer(id string, timeout time.Duration) error {
+	ctx, cancel := d.getTimeoutContext()
+	defer cancel()
+
+	_, errC := d.client.ContainerWait(ctx, "skupper-router", "")
+	if waitErr := <-errC; waitErr != nil {
+		return waitErr
+	}
+	return nil
+}
 func (d *skupDockerClient) RemoveContainer(id string, opts dockertypes.ContainerRemoveOptions) error {
 	ctx, cancel := d.getTimeoutContext()
 	defer cancel()
@@ -215,6 +225,19 @@ func (d *skupDockerClient) ListImages(opts dockertypes.ImageListOptions) ([]dock
 		return nil, err
 	}
 	return images, nil
+}
+
+func (d *skupDockerClient) ServerVersion() (dockertypes.Version, error) {
+	ctx, cancel := d.getTimeoutContext()
+	defer cancel()
+	version, err := d.client.ServerVersion(ctx)
+	if ctxErr := contextError(ctx); ctxErr != nil {
+		return version, ctxErr
+	}
+	if err != nil {
+		return version, err
+	}
+	return version, nil
 }
 
 func base64EncodeAuth(auth dockertypes.AuthConfig) (string, error) {
@@ -625,8 +648,9 @@ func (d *skupDockerClient) CreateNetwork(id string) (dockertypes.NetworkCreateRe
 		CheckDuplicate: true,
 		Driver:         "bridge",
 		Options: map[string]string{
-			"com.docker.network.bridge.name":       "skupper0",
-			"com.docker.network.bridge.enable_icc": "true",
+			"com.docker.network.bridge.name":                 "skupper0",
+			"com.docker.network.bridge.enable_icc":           "true",
+			"com.docker.network.bridge.enable_ip_masquerade": "true",
 		},
 	})
 	if ctxErr := contextError(ctx); ctxErr != nil {

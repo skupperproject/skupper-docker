@@ -33,6 +33,22 @@ func generateConnectorName(path string) (string, error) {
 	return "conn" + strconv.Itoa(max), nil
 }
 
+func (cli *VanClient) isOwnToken(secretFile string) (bool, error) {
+	content, err := certs.GetSecretContent(secretFile)
+	if err != nil {
+		return false, err
+	}
+	generatedBy, ok := content["skupper.io/generated-by"]
+	if !ok {
+		return false, fmt.Errorf("Can't find secret origin.")
+	}
+	siteConfig, err := cli.SiteConfigInspect("skupper0")
+	if err != nil {
+		return false, err
+	}
+	return siteConfig.UID == string(generatedBy), nil
+}
+
 func (cli *VanClient) ConnectorCreate(secretFile string, options types.ConnectorCreateOptions) (string, error) {
 
 	// TODO certs should return err
@@ -41,7 +57,7 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		return "", fmt.Errorf("Failed to make connector: %w", err)
 	}
 
-	existing, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
+	_, err = docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
 		return "", fmt.Errorf("Failed to retrieve transport container (need init?): %w", err)
 	}
@@ -60,15 +76,13 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		return "", fmt.Errorf("Cannot create connection to self with token '%s'", secretFile)
 	}
 
-	mode := qdr.GetTransportMode(existing)
-
 	if options.Name == "" {
-		options.Name, err = generateConnectorName(types.ConnPath)
+		options.Name, err = generateConnectorName(types.GetSkupperPath(types.ConnectionsPath))
 		if err != nil {
 			return "", err
 		}
 	}
-	connPath := types.ConnPath + options.Name
+	connPath := types.GetSkupperPath(types.ConnectionsPath) + "/" + options.Name
 
 	if err := os.Mkdir(connPath, 0755); err != nil {
 		return "", fmt.Errorf("Failed to create skupper connector directory: %w", err)
@@ -85,22 +99,37 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		}
 	}
 
-	connector := types.Connector{
-		Name: options.Name,
-		Cost: options.Cost,
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
+	if err != nil {
+		return "", fmt.Errorf("Failed to retrieve router config: %w", err)
 	}
-	if mode == types.TransportModeInterior {
-		hostString, _ := ioutil.ReadFile(connPath + "/inter-router-host")
-		portString, _ := ioutil.ReadFile(connPath + "/inter-router-port")
-		connector.Host = string(hostString)
-		connector.Port = string(portString)
-		connector.Role = string(types.ConnectorRoleInterRouter)
-	} else {
+
+	profileName := options.Name + "-profile"
+	current.AddConnSslProfile(qdr.SslProfile{
+		Name: profileName,
+	})
+	connector := qdr.Connector{
+		Name:       options.Name,
+		Cost:       options.Cost,
+		SslProfile: profileName,
+	}
+	if current.IsEdge() {
 		hostString, _ := ioutil.ReadFile(connPath + "/edge-host")
 		portString, _ := ioutil.ReadFile(connPath + "/edge-port")
 		connector.Host = string(hostString)
 		connector.Port = string(portString)
-		connector.Role = string(types.ConnectorRoleEdge)
+		connector.Role = qdr.RoleEdge
+	} else {
+		hostString, _ := ioutil.ReadFile(connPath + "/inter-router-host")
+		portString, _ := ioutil.ReadFile(connPath + "/inter-router-port")
+		connector.Host = string(hostString)
+		connector.Port = string(portString)
+		connector.Role = qdr.RoleInterRouter
+	}
+	current.AddConnector(connector)
+	err = current.WriteToConfigFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
+	if err != nil {
+		return "", fmt.Errorf("Failed to update router config file: %w", err)
 	}
 
 	err = docker.RestartTransportContainer(cli.DockerInterface)
@@ -108,6 +137,7 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 		return "", fmt.Errorf("Failed to re-start transport container: %w", err)
 	}
 
+	//	err = docker.RestartControllerContainer(cli.DockerInterface)
 	err = docker.RestartContainer(types.ControllerDeploymentName, cli.DockerInterface)
 	if err != nil {
 		return "", fmt.Errorf("Failed to re-start controller container: %w", err)

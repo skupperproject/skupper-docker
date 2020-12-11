@@ -18,7 +18,12 @@ func (cli *VanClient) RouterInspect() (*types.RouterInspectResponse, error) {
 		log.Println("Failed to retrieve transport container (need init?): ", err.Error())
 		return vir, err
 	}
-	vir.TransportVersion = fmt.Sprintf("%s (%s)", transport.Config.Image, transport.Image[:19])
+
+	vir.TransportVersion, err = docker.GetImageVersion(transport.Config.Image, cli.DockerInterface)
+	if err != nil {
+		log.Println("Failed to retrieve transport container version:", err.Error())
+		return vir, err
+	}
 	vir.Status.State = transport.State.Status
 
 	controller, err := docker.InspectContainer(types.ControllerDeploymentName, cli.DockerInterface)
@@ -26,9 +31,19 @@ func (cli *VanClient) RouterInspect() (*types.RouterInspectResponse, error) {
 		log.Println("Failed to retrieve controller container (need init?): ", err.Error())
 		return vir, err
 	}
-	vir.ControllerVersion = fmt.Sprintf("%s (%s)", controller.Config.Image, controller.Image[:19])
 
-	vir.Status.Mode = string(qdr.GetTransportMode(transport))
+	vir.ControllerVersion, err = docker.GetImageVersion(controller.Config.Image, cli.DockerInterface)
+	if err != nil {
+		log.Println("Failed to retrieve controller container version:", err.Error())
+		return vir, err
+	}
+
+	routerConfig, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
+	if err != nil {
+		return vir, fmt.Errorf("Failed to retrieve router config: %w", err)
+	}
+	vir.Status.Mode = string(routerConfig.Metadata.Mode)
+
 	connected, err := qdr.GetConnectedSites(cli.DockerInterface)
 	for i := 0; i < 5 && err != nil; i++ {
 		time.Sleep(500 * time.Millisecond)

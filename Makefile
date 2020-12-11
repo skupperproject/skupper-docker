@@ -7,7 +7,7 @@ build-cmd:
 	go build -ldflags="-X main.version=${VERSION}"  -o skupper-docker cmd/skupper-docker/main.go
 
 build-controller:
-	go build -ldflags="-X main.version=${VERSION}"  -o controller cmd/skupper-docker-controller/main.go cmd/skupper-docker-controller/controller.go cmd/skupper-docker-controller/service_sync.go
+	go build -ldflags="-X main.version=${VERSION}"  -o controller cmd/service-controller/main.go cmd/service-controller/controller.go cmd/service-controller/service_sync.go cmd/service-controller/bridges.go
 
 docker-build:
 	docker build -t ${IMAGE} .

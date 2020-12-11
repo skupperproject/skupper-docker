@@ -9,16 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/client"
-)
-
-const (
-	ServiceSyncAddress  = "mc/$skupper-service-sync"
-	hostPath            = "/tmp/skupper"
-	skupperCertPath     = hostPath + "/qpid-dispatch-certs/"
-	skupperServicesPath = "/etc/messaging/services/"
+	"github.com/skupperproject/skupper-docker/pkg/docker"
 )
 
 func describe(i interface{}) {
@@ -75,12 +70,11 @@ func getTlsConfig(verify bool, cert, key, ca string) (*tls.Config, error) {
 
 func main() {
 	siteId := os.Getenv("SKUPPER_SITE_ID")
-	endpoint := os.Getenv("SKUPPER_DOCKER_ENDPOINT")
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := SetupSignalHandler()
 
-	cli, err := client.NewClient(endpoint)
+	cli, err := client.NewClient()
 	if err != nil {
 		log.Fatal("Error getting van client", err.Error())
 	}
@@ -93,6 +87,12 @@ func main() {
 	controller, err := NewController(cli, siteId, tlsConfig)
 	if err != nil {
 		log.Fatal("Error getting new controller: ", err.Error())
+	}
+
+	log.Println("Waiting for the Skupper router component to start")
+	_, err = docker.WaitForContainerStatus("skupper-router", "running", time.Second*180, time.Second*5, cli.DockerInterface)
+	if err != nil {
+		log.Fatal("Failed waiting for router to be running", err.Error())
 	}
 
 	// start the controller workers

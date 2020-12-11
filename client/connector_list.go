@@ -9,47 +9,46 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
 )
 
-func retrieveConnectors(mode types.TransportMode) ([]*types.Connector, error) {
-	var connectors []*types.Connector
-	files, err := ioutil.ReadDir(types.ConnPath)
-	if err == nil {
-		var role types.ConnectorRole
-		var host []byte
-		var port []byte
-		var suffix string
-		if mode == types.TransportModeEdge {
-			role = types.ConnectorRoleEdge
-			suffix = "/edge-"
-		} else {
-			role = types.ConnectorRoleInterRouter
-			suffix = "/inter-router-"
-		}
-		// TODO handle err on read
-		for _, f := range files {
-			host, _ = ioutil.ReadFile(types.ConnPath + f.Name() + suffix + "host")
-			port, _ = ioutil.ReadFile(types.ConnPath + f.Name() + suffix + "port")
-			connectors = append(connectors, &types.Connector{
-				Name: f.Name(),
-				Host: string(host),
-				Port: string(port),
-				Role: string(role),
-			})
-		}
-	} else {
-		return connectors, err
-	}
-	return connectors, nil
-}
-
 func (cli *VanClient) ConnectorList() ([]*types.Connector, error) {
 	var connectors []*types.Connector
 	// verify that the transport is interior mode
-	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
+	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
-		// TODO: is not found versus error
 		return connectors, fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
-	mode := qdr.GetTransportMode(current)
-	return retrieveConnectors(mode)
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
+	if err != nil {
+		return connectors, fmt.Errorf("Failed to retrieve router config: %w", err)
+	}
+
+	files, err := ioutil.ReadDir(types.GetSkupperPath(types.ConnectionsPath))
+	if err != nil {
+		return connectors, fmt.Errorf("Failed to read connector definitions: %w", err)
+	}
+
+	var role types.ConnectorRole
+	var host []byte
+	var port []byte
+	var suffix string
+	if current.IsEdge() {
+		role = types.ConnectorRoleEdge
+		suffix = "/edge-"
+	} else {
+		role = types.ConnectorRoleInterRouter
+		suffix = "/inter-router-"
+	}
+
+	for _, f := range files {
+		path := types.GetSkupperPath(types.ConnectionsPath)
+		host, _ = ioutil.ReadFile(path + "/" + f.Name() + suffix + "host")
+		port, _ = ioutil.ReadFile(path + "/" + f.Name() + suffix + "port")
+		connectors = append(connectors, &types.Connector{
+			Name: f.Name(),
+			Host: string(host),
+			Port: string(port),
+			Role: string(role),
+		})
+	}
+	return connectors, nil
 }

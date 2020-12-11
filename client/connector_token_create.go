@@ -11,13 +11,17 @@ import (
 
 func (cli *VanClient) ConnectorTokenCreate(subject string, secretFile string) error {
 	// verify that the transport is interior mode
-	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
+	router, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
 	if err != nil {
-		// TODO: is not found versus error
 		return fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
 	}
 
-	if !qdr.IsInterior(current) {
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve router config: %w", err)
+	}
+
+	if current.IsEdge() {
 		return fmt.Errorf("Edge mode transport configuration cannot accept connections")
 	}
 
@@ -26,7 +30,7 @@ func (cli *VanClient) ConnectorTokenCreate(subject string, secretFile string) er
 		return fmt.Errorf("Unable to retrieve CA data: %w", err)
 	}
 
-	ipAddr := string(current.NetworkSettings.Networks["skupper-network"].IPAddress)
+	ipAddr := string(router.NetworkSettings.Networks["skupper-network"].IPAddress)
 	annotations := make(map[string]string)
 	annotations["inter-router-port"] = "55671"
 	annotations["inter-router-host"] = ipAddr

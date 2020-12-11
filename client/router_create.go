@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"strconv"
+	"strings"
 
 	dockertypes "github.com/docker/docker/api/types"
 
@@ -15,14 +17,14 @@ import (
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
+	"github.com/skupperproject/skupper-docker/pkg/qdr"
 	"github.com/skupperproject/skupper-docker/pkg/utils"
 	"github.com/skupperproject/skupper-docker/pkg/utils/configs"
 )
 
-// TODO: move all the certs stuff to a package?
 func getCertData(name string) (certs.CertificateData, error) {
 	certData := certs.CertificateData{}
-	certPath := types.CertPath + name
+	certPath := types.GetSkupperPath(types.CertsPath) + "/" + name
 
 	files, err := ioutil.ReadDir(certPath)
 	if err == nil {
@@ -38,19 +40,19 @@ func getCertData(name string) (certs.CertificateData, error) {
 	return certData, err
 }
 
-func generateCredentials(ca string, name string, subject string, hosts string, includeConnectJson bool) error {
+func generateCredentials(ca string, name string, subject string, hosts []string, includeConnectJson bool) error {
 	caData, _ := getCertData(ca)
-	certData := certs.GenerateCertificateData(name, subject, hosts, caData)
+	certData := certs.GenerateCertificateData(name, subject, strings.Join(hosts, ","), caData)
 
 	for k, v := range certData {
-		if err := ioutil.WriteFile(types.CertPath+name+"/"+k, v, 0755); err != nil {
+		if err := ioutil.WriteFile(types.GetSkupperPath(types.CertsPath)+"/"+name+"/"+k, v, 0755); err != nil {
 			return fmt.Errorf("Failed to write certificate file: %w", err)
 		}
 	}
 
 	if includeConnectJson {
-		certData["connect.json"] = []byte(configs.ConnectJson())
-		if err := ioutil.WriteFile(types.CertPath+name+"/connect.json", []byte(configs.ConnectJson()), 0755); err != nil {
+		certData["connect.json"] = []byte(configs.ConnectJSON())
+		if err := ioutil.WriteFile(types.GetSkupperPath(types.CertsPath)+"/"+name+"/connect.json", []byte(configs.ConnectJSON()), 0755); err != nil {
 			return fmt.Errorf("Failed to write connect file: %w", err)
 		}
 	}
@@ -63,13 +65,13 @@ func ensureCA(name string) (certs.CertificateData, error) {
 	// check if existing by looking at path/dir, if not create dir to persist
 	caData := certs.GenerateCACertificateData(name, name)
 
-	if err := os.Mkdir(types.CertPath+name, 0755); err != nil {
+	if err := os.Mkdir(types.GetSkupperPath(types.CertsPath)+"/"+name, 0755); err != nil {
 		return nil, fmt.Errorf("Failed to create certificate directory: %w", err)
 	}
 
 	for k, v := range caData {
-		if err := ioutil.WriteFile(types.CertPath+name+"/"+k, v, 0755); err != nil {
-			return nil, fmt.Errorf("Failed to write CA certificate file: %w", err.Error())
+		if err := ioutil.WriteFile(types.GetSkupperPath(types.CertsPath)+"/"+name+"/"+k, v, 0755); err != nil {
+			return nil, fmt.Errorf("Failed to write CA certificate file: %w", err)
 		}
 	}
 
@@ -101,29 +103,40 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		"prometheus.io/scrape": "true",
 	}
 
-	listeners := []types.Listener{}
-	interRouterListeners := []types.Listener{}
-	edgeListeners := []types.Listener{}
-	sslProfiles := []types.SslProfile{}
-	listeners = append(listeners, types.Listener{
+	routerConfig := qdr.InitialConfig(van.Name+"-${HOSTNAME}", siteId, options.IsEdge)
+	routerConfig.AddAddress(qdr.Address{
+		Prefix:       "mc",
+		Distribution: "multicast",
+	})
+	routerConfig.AddListener(qdr.Listener{
+		Host:        "0.0.0.0",
+		Port:        9090,
+		Role:        "normal",
+		Http:        true,
+		HttpRootDir: "disabled",
+		Websockets:  false,
+		Healthz:     true,
+		Metrics:     true,
+	})
+	routerConfig.AddListener(qdr.Listener{
 		Name: "amqp",
 		Host: "localhost",
-		Port: 5672,
+		Port: types.AmqpDefaultPort,
 	})
-	sslProfiles = append(sslProfiles, types.SslProfile{
+	routerConfig.AddSslProfile(qdr.SslProfile{
 		Name: "skupper-amqps",
 	})
-	listeners = append(listeners, types.Listener{
+	routerConfig.AddListener(qdr.Listener{
 		Name:             "amqps",
 		Host:             "0.0.0.0",
-		Port:             5671,
+		Port:             types.AmqpsDefaultPort,
 		SslProfile:       "skupper-amqps",
 		SaslMechanisms:   "EXTERNAL",
-		AuthenticatePeer: false,
+		AuthenticatePeer: true,
 	})
 	if options.EnableRouterConsole {
 		if van.AuthMode == types.ConsoleAuthModeInternal {
-			listeners = append(listeners, types.Listener{
+			routerConfig.AddListener(qdr.Listener{
 				Name:             types.ConsolePortName,
 				Host:             "0.0.0.0",
 				Port:             types.ConsoleDefaultServicePort,
@@ -131,7 +144,7 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 				AuthenticatePeer: true,
 			})
 		} else if van.AuthMode == types.ConsoleAuthModeUnsecured {
-			listeners = append(listeners, types.Listener{
+			routerConfig.AddListener(qdr.Listener{
 				Name: types.ConsolePortName,
 				Host: "0.0.0.0",
 				Port: types.ConsoleDefaultServicePort,
@@ -140,38 +153,29 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		}
 	}
 	if !options.IsEdge {
-		sslProfiles = append(sslProfiles, types.SslProfile{
-			Name: "skupper-internal",
+		routerConfig.AddSslProfile(qdr.SslProfile{
+			Name: types.InterRouterProfile,
 		})
-		interRouterListeners = append(interRouterListeners, types.Listener{
+		routerConfig.AddListener(qdr.Listener{
 			Name:             "interior-listener",
 			Host:             "0.0.0.0",
+			Role:             qdr.RoleInterRouter,
 			Port:             types.InterRouterListenerPort,
 			SslProfile:       types.InterRouterProfile,
 			SaslMechanisms:   "EXTERNAL",
 			AuthenticatePeer: true,
 		})
-		edgeListeners = append(edgeListeners, types.Listener{
+		routerConfig.AddListener(qdr.Listener{
 			Name:             "edge-listener",
 			Host:             "0.0.0.0",
+			Role:             qdr.RoleEdge,
 			Port:             types.EdgeListenerPort,
 			SslProfile:       types.InterRouterProfile,
 			SaslMechanisms:   "EXTERNAL",
 			AuthenticatePeer: true,
 		})
 	}
-
-	// TODO: remove redundancy, needed for now for config template
-	van.Assembly.Name = van.Name
-	if options.IsEdge {
-		van.Assembly.Mode = string(types.TransportModeEdge)
-	} else {
-		van.Assembly.Mode = string(types.TransportModeInterior)
-	}
-	van.Assembly.Listeners = listeners
-	van.Assembly.InterRouterListeners = interRouterListeners
-	van.Assembly.EdgeListeners = edgeListeners
-	van.Assembly.SslProfiles = sslProfiles
+	van.RouterConfig, _ = qdr.MarshalRouterConfig(routerConfig)
 
 	envVars := []string{}
 	if !options.IsEdge {
@@ -183,8 +187,12 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		envVars = append(envVars, "QDROUTERD_AUTO_CREATE_SASLDB_SOURCE=/etc/qpid-dispatch/sasl-users/")
 		envVars = append(envVars, "QDROUTERD_AUTO_CREATE_SASLDB_PATH=/tmp/qdrouterd.sasldb")
 	}
-	// envVars = append(envVars, "PN_TRACE_FRM=1")
-	envVars = append(envVars, "QDROUTERD_CONF="+configs.QdrouterdConfig(&van.Assembly))
+	if options.TraceLog {
+		envVars = append(envVars, "PN_TRACE_FRM=1")
+	}
+	envVars = append(envVars, "QDROUTERD_CONF=/etc/qpid-dispatch/config/"+types.TransportConfigFile)
+	envVars = append(envVars, "QDROUTERD_CONF_TYPE=json")
+	envVars = append(envVars, "SKUPPER_SITE_ID="+siteId)
 	van.Transport.EnvVar = envVars
 
 	ports := nat.PortSet{}
@@ -202,6 +210,7 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 	volumes := []string{
 		"skupper",
 		"skupper-amqps",
+		"router-config",
 	}
 	if !options.IsEdge {
 		volumes = append(volumes, "skupper-internal")
@@ -214,10 +223,11 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 
 	// Note: use index to make directory, use index/value to make mount
 	mounts := make(map[string]string)
-	mounts[types.CertPath] = "/etc/qpid-dispatch-certs"
-	mounts[types.ConnPath] = "/etc/qpid-dispatch/connections"
-	mounts[types.ConsoleUsersPath] = "/etc/qpid-dispatch/sasl-users/"
-	mounts[types.SaslConfigPath] = "/etc/sasl2"
+	mounts[types.GetSkupperPath(types.CertsPath)] = "/etc/qpid-dispatch-certs"
+	mounts[types.GetSkupperPath(types.ConnectionsPath)] = "/etc/qpid-dispatch/connections"
+	mounts[types.GetSkupperPath(types.ConfigPath)] = "/etc/qpid-dispatch/config"
+	mounts[types.GetSkupperPath(types.ConsoleUsersPath)] = "/etc/qpid-dispatch/sasl-users/"
+	mounts[types.GetSkupperPath(types.SaslConfigPath)] = "/etc/sasl2"
 	van.Transport.Mounts = mounts
 
 	cas := []types.CertAuthority{}
@@ -231,16 +241,16 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 	credentials = append(credentials, types.Credential{
 		CA:          "skupper-ca",
 		Name:        "skupper-amqps",
-		Subject:     "skupper-router",
-		Hosts:       "skupper-router",
+		Subject:     "skupper-messaging",
+		Hosts:       []string{"skupper-router"},
 		ConnectJson: false,
 		Post:        false,
 	})
 	credentials = append(credentials, types.Credential{
 		CA:          "skupper-ca",
 		Name:        "skupper",
-		Subject:     "skupper-router",
-		Hosts:       "",
+		Subject:     "skupper-messaging",
+		Hosts:       []string{},
 		ConnectJson: true,
 		Post:        false,
 	})
@@ -249,7 +259,7 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 			CA:          "skupper-internal-ca",
 			Name:        "skupper-internal",
 			Subject:     "skupper-internal",
-			Hosts:       "skupper-internal",
+			Hosts:       []string{"skupper-router"},
 			ConnectJson: false,
 			Post:        false,
 		})
@@ -266,14 +276,25 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		"application":          types.ControllerDeploymentName,
 		"skupper.io/component": types.ControllerComponentName,
 	}
+	var skupperHost string
+	if runtime.GOOS == "linux" {
+		skupperHost = utils.GetInternalIP("docker0")
+	} else {
+		skupperHost = "host-gateway"
+	}
 	van.Controller.EnvVar = []string{
 		"SKUPPER_SITE_ID=" + siteId,
+		"SKUPPER_TMPDIR=" + os.Getenv("SKUPPER_TMPDIR"),
 		"SKUPPER_PROXY_IMAGE=" + van.Controller.Image,
+		"SKUPPER_HOST=" + skupperHost,
+	}
+	if options.TraceLog {
+		van.Controller.EnvVar = append(van.Controller.EnvVar, "PN_TRACE_FRM=1")
 	}
 	van.Controller.Mounts = map[string]string{
-		types.CertPath + "skupper": "/etc/messaging",
-		types.ServicePath:          "/etc/messaging/services",
-		"/var/run":                 "/var/run",
+		types.GetSkupperPath(types.CertsPath) + "/" + "skupper": "/etc/messaging",
+		types.GetSkupperPath(types.ServicesPath):                "/etc/messaging/services",
+		"/var/run":                                              "/var/run",
 	}
 
 	return van, nil
@@ -304,12 +325,12 @@ func (cli *VanClient) RouterCreate(options types.SiteConfigSpec) error {
 
 	// TODO check if resources already exist: either delete them all or error out
 	// setup host dirs
-	_ = os.RemoveAll(types.HostPath)
+	_ = os.RemoveAll(types.GetSkupperPath(types.HostPath))
 	// create host dirs TODO this should not be here
-	if err := os.MkdirAll(types.HostPath, 0755); err != nil {
+	if err := os.MkdirAll(types.GetSkupperPath(types.HostPath), 0755); err != nil {
 		return err
 	}
-	if err := os.Mkdir(types.SitePath, 0755); err != nil {
+	if err := os.Mkdir(types.GetSkupperPath(types.SitesPath), 0755); err != nil {
 		return err
 	}
 
@@ -333,53 +354,49 @@ func (cli *VanClient) RouterCreate(options types.SiteConfigSpec) error {
 		return err
 	}
 
-	for mnt, _ := range van.Transport.Mounts {
+	for mnt := range van.Transport.Mounts {
 		if err := os.Mkdir(mnt, 0755); err != nil {
 			return err
 		}
 	}
 	for _, v := range van.Transport.Volumes {
-		if err := os.Mkdir(types.CertPath+v, 0755); err != nil {
+		if err := os.Mkdir(types.GetSkupperPath(types.CertsPath)+"/"+v, 0755); err != nil {
 			return err
 		}
 	}
-	// this one is needed by the controller
-	if err := os.Mkdir(types.ServicePath, 0755); err != nil {
-		return err
-	}
-	if err := os.Mkdir(types.ServicePath+"local/", 0755); err != nil {
-		return err
-	}
-	if err := os.Mkdir(types.ServicePath+"all/", 0755); err != nil {
-		return err
-	}
 
+	// this one is needed by the controller
+	if err := os.Mkdir(types.GetSkupperPath(types.ServicesPath), 0755); err != nil {
+		return err
+	}
 	// create skupper-services file
 	svcDefs := make(map[string]types.ServiceInterface)
 	encoded, err := json.Marshal(svcDefs)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(types.LocalServiceDefsFile, encoded, 0755)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(types.AllServiceDefsFile, encoded, 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ServicesPath)+"/skupper-services", encoded, 0755)
 	if err != nil {
 		return err
 	}
 
+	// write qdrouterd configs
+
+	err = ioutil.WriteFile(types.GetSkupperPath(types.ConfigPath)+"/qdrouterd.json", []byte(van.RouterConfig), 0755)
+	if err != nil {
+		return err
+	}
 	if options.EnableConsole && options.AuthMode == string(types.ConsoleAuthModeInternal) {
 		config := `
 pwcheck_method: auxprop
 auxprop_plugin: sasldb
 sasldb_path: /tmp/qdrouterd.sasldb
 `
-		err := ioutil.WriteFile(types.SaslConfigPath+"/qdrouterd.conf", []byte(config), 0755)
+		err := ioutil.WriteFile(types.GetSkupperPath(types.SaslConfigPath)+"/qdrouterd.conf", []byte(config), 0755)
 		if err != nil {
 			return err
 		}
-		err = ioutil.WriteFile(types.ConsoleUsersPath+"/"+options.User, []byte(options.Password), 0755)
+		err = ioutil.WriteFile(types.GetSkupperPath(types.ConsoleUsersPath)+"/"+options.User, []byte(options.Password), 0755)
 		if err != nil {
 			return err
 		}

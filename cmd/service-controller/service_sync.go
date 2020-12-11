@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"sort"
 	"time"
 
 	amqp "github.com/interconnectedcloud/go-amqp"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/skupperproject/skupper-docker/api/types"
 )
 
@@ -20,8 +18,17 @@ type ServiceSyncUpdate struct {
 	indexed map[string]types.ServiceInterface
 }
 
+func (c *Controller) pareByOrigin(service string) {
+	for _, origin := range c.byOrigin {
+		if _, ok := origin[service]; ok {
+			delete(origin, service)
+			return
+		}
+	}
+}
+
 func (c *Controller) serviceSyncDefinitionsUpdated(definitions map[string]types.ServiceInterface) {
-	var latest []types.ServiceInterface // becomes c.Local
+	latest := make(map[string]types.ServiceInterface) // becomes c.localServices
 	byName := make(map[string]types.ServiceInterface)
 	var added []types.ServiceInterface
 	var modified []types.ServiceInterface
@@ -42,45 +49,65 @@ func (c *Controller) serviceSyncDefinitionsUpdated(definitions map[string]types.
 			}
 			c.byOrigin[service.Origin][name] = service
 		} else {
-			latest = append(latest, service)
+			latest[service.Address] = service
+			c.pareByOrigin(service.Address)
 		}
 		byName[service.Address] = service
 	}
 
-	sort.Sort(types.ByServiceInterfaceAddress(latest))
-	last := make(map[string]types.ServiceInterface)
 	for _, def := range c.localServices {
-		last[def.Address] = def
-	}
-	current := make(map[string]types.ServiceInterface)
-	for _, def := range latest {
-		current[def.Address] = def
-	}
-	for _, def := range last {
-		if _, ok := current[def.Address]; !ok {
+		if _, ok := latest[def.Address]; !ok {
 			removed = append(removed, def)
-		} else if !reflect.DeepEqual(def, current[def.Address]) {
+		} else if !reflect.DeepEqual(def, latest[def.Address]) {
 			modified = append(modified, def)
 		}
 	}
-	for _, def := range current {
-		if _, ok := last[def.Address]; !ok {
+	for _, def := range latest {
+		if _, ok := c.localServices[def.Address]; !ok {
 			added = append(added, def)
 		}
 	}
+
+	if len(added) > 0 {
+		log.Println("Service interface(s) added", added)
+	}
+	if len(removed) > 0 {
+		log.Println("Service interface(s) removed", removed)
+	}
+	if len(modified) > 0 {
+		log.Println("Service interface(s) modified", modified)
+	}
+
 	c.localServices = latest
 	c.byName = byName
+}
+
+func equivalentServiceDefinition(a *types.ServiceInterface, b *types.ServiceInterface) bool {
+	if a.Protocol != b.Protocol || a.Port != b.Port || a.EventChannel != b.EventChannel || a.Aggregate != b.Aggregate {
+		return false
+	}
+	if a.Headless == nil && b.Headless == nil {
+		return true
+	} else if a.Headless != nil && b.Headless != nil {
+		if a.Headless.Name != b.Headless.Name || a.Headless.Size != b.Headless.Size || a.Headless.TargetPort != b.Headless.TargetPort {
+			return false
+		} else {
+			return true
+		}
+	} else {
+		return false
+	}
 }
 
 func (c *Controller) ensureServiceInterfaceDefinitions(origin string, serviceInterfaceDefs map[string]types.ServiceInterface) {
 	var changed []types.ServiceInterface
 	var deleted []string
 
+	c.heardFrom[origin] = time.Now()
+
 	for _, def := range serviceInterfaceDefs {
-		// TODO: change in origin and not equivalent service record
-		// check if it already exists or exists from different origin
-		//  if !ok || existing.Origin == origin && !equivalentServiceRecord(si, existing)
-		if _, ok := c.byName[def.Address]; !ok {
+		existing, ok := c.byName[def.Address]
+		if !ok || (existing.Origin == origin && !equivalentServiceDefinition(&def, &existing)) {
 			changed = append(changed, def)
 		}
 
@@ -97,25 +124,18 @@ func (c *Controller) ensureServiceInterfaceDefinitions(origin string, serviceInt
 		}
 	}
 
-	if len(changed) > 0 || len(deleted) > 0 {
-		svcDefs, err := getServiceDefinitions("all")
-		if err != nil {
-			log.Println("Failed to retrieve service definitions: ", err.Error())
-			return
-		}
-		for _, def := range changed {
-			svcDefs[def.Address] = def
-		}
-		for _, name := range deleted {
-			delete(svcDefs, name)
-			delete(c.byOrigin[origin], name)
-		}
-		err = updateServiceDefinitions("all", svcDefs)
-		if err != nil {
-			log.Println("Failed to write all service interface file: ", err.Error())
-		}
+	if len(changed) == 0 && len(deleted) == 0 {
+		return
 	}
-	return
+
+	err := updateSkupperServices(changed, deleted, origin)
+	if err != nil {
+		log.Println("Failed to update service definitions: ", err.Error())
+	}
+
+	for _, name := range deleted {
+		delete(c.byOrigin[origin], name)
+	}
 }
 
 func (c *Controller) syncSender(sendLocal chan bool) {
@@ -132,6 +152,7 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 	}()
 
 	tickerSend := time.NewTicker(5 * time.Second)
+	tickerAge := time.NewTicker(30 * time.Second)
 
 	properties.Subject = "service-sync-update"
 	request.Properties = &properties
@@ -141,21 +162,12 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 	for {
 		select {
 		case <-tickerSend.C:
-			svcDefs, err := getServiceDefinitions("local")
-			if err != nil {
-				log.Println("Failed to retrieve skupper service definitions: ", err.Error())
-				return
-			}
 			local := make([]types.ServiceInterface, 0)
-			for _, si := range svcDefs {
-				service := types.ServiceInterface{
-					Address:  si.Address,
-					Protocol: si.Protocol,
-					Port:     si.Port,
-					Targets:  []types.ServiceInterfaceTarget{},
-				}
-				local = append(local, service)
+
+			for _, si := range c.localServices {
+				local = append(local, si)
 			}
+
 			encoded, err := json.Marshal(local)
 			if err != nil {
 				log.Println("Failed to create json for service definition sync: ", err.Error())
@@ -163,14 +175,47 @@ func (c *Controller) syncSender(sendLocal chan bool) {
 			}
 			request.Value = string(encoded)
 			err = sender.Send(ctx, &request)
+
+		case <-tickerAge.C:
+			var agedOrigins []string
+
+			now := time.Now()
+
+			for origin, _ := range c.byOrigin {
+				var deleted []string
+
+				if lastHeard, ok := c.heardFrom[origin]; ok {
+					if now.Sub(lastHeard) >= 60*time.Second {
+						agedOrigins = append(agedOrigins, origin)
+						agedDefinitions := c.byOrigin[origin]
+						for name, _ := range agedDefinitions {
+							deleted = append(deleted, name)
+						}
+						if len(deleted) > 0 {
+							err := updateSkupperServices([]types.ServiceInterface{}, deleted, origin)
+							if err != nil {
+								log.Println("Failed to update service definitions: ", err.Error())
+								return
+							}
+						}
+					}
+				}
+			}
+
+			for _, originName := range agedOrigins {
+				log.Println("Service sync aged out service definitions from origin ", originName)
+				delete(c.heardFrom, originName)
+				delete(c.byOrigin, originName)
+			}
 		}
 	}
 }
 
-func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) error {
+func (c *Controller) runServiceSync() error {
 	ctx := context.Background()
 
 	log.Println("Establishing connection to skupper-messaging service for service sync")
+
 	client, err := amqp.Dial("amqps://skupper-router:5671", amqp.ConnSASLExternal(), amqp.ConnMaxFrameSize(4294967295), amqp.ConnTLSConfig(c.tlsConfig))
 	if err != nil {
 		return fmt.Errorf("Failed to create amqp connection: %w", err)
@@ -214,7 +259,7 @@ func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) 
 
 		if subject == "service-sync-request" {
 			log.Println("Controller received service sync request")
-			sendLocal <- true
+			//sendLocal <- true
 		} else if subject == "service-sync-update" {
 			if origin, ok = msg.ApplicationProperties["origin"].(string); ok {
 				if origin != c.origin {
@@ -227,11 +272,12 @@ func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) 
 								def.Origin = origin
 								indexed[def.Address] = def
 							}
-							syncUpdate <- &ServiceSyncUpdate{
-								origin:  origin,
-								indexed: indexed,
-							}
+							c.ensureServiceInterfaceDefinitions(origin, indexed)
+						} else {
+							log.Printf("Skupper service sync update from %s was not valid json: %s", origin, err)
 						}
+					} else {
+						log.Printf("Skupper service sync update from %s was not a string", origin)
 					}
 				}
 			} else {
@@ -239,49 +285,6 @@ func (c *Controller) runServiceSyncReceiver(syncUpdate chan *ServiceSyncUpdate) 
 			}
 		} else {
 			log.Println("Service sync subject not valid")
-		}
-	}
-}
-
-func (c *Controller) runServiceSyncLocalWatcher(syncUpdate chan *ServiceSyncUpdate) {
-	var watcher *fsnotify.Watcher
-
-	watcher, _ = fsnotify.NewWatcher()
-	defer watcher.Close()
-
-	err := watcher.Add("/etc/messaging/services/local/")
-	if err != nil {
-		log.Println("Could not add local services directory watcher", err.Error())
-		return
-	}
-
-	// process anything already present
-	c.processLocalServices()
-
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				svcDefs, err := getServiceDefinitions("local")
-				if err != nil {
-					log.Println("Failed to retreive service definitions:", err.Error())
-				}
-
-				indexed := make(map[string]types.ServiceInterface)
-				for _, def := range svcDefs {
-					def.Origin = c.origin
-					indexed[def.Address] = def
-				}
-				syncUpdate <- &ServiceSyncUpdate{
-					origin:  c.origin,
-					indexed: indexed,
-				}
-			} else {
-				return
-			}
 		}
 	}
 }

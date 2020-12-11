@@ -9,50 +9,43 @@ import (
 	"github.com/skupperproject/skupper-docker/pkg/qdr"
 )
 
-func getConnector(name string, mode types.TransportMode) (*types.Connector, error) {
+func (cli *VanClient) ConnectorInspect(name string) (*types.ConnectorInspectResponse, error) {
+	vci := &types.ConnectorInspectResponse{}
 	var role types.ConnectorRole
 	var suffix string
 
-	if mode == types.TransportModeEdge {
+	_, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
+	if err != nil {
+		// TODO: is not found versus error
+		return vci, fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
+	}
+
+	current, err := qdr.GetRouterConfigFromFile(types.GetSkupperPath(types.ConfigPath) + "/qdrouterd.json")
+	if err != nil {
+		return vci, fmt.Errorf("Failed to retrieve router config: %w", err)
+	}
+
+	if current.IsEdge() {
 		role = types.ConnectorRoleEdge
 		suffix = "/edge-"
 	} else {
 		role = types.ConnectorRoleInterRouter
 		suffix = "/inter-router-"
 	}
-	host, err := ioutil.ReadFile(types.ConnPath + name + suffix + "host")
+
+	host, err := ioutil.ReadFile(types.GetSkupperPath(types.ConnectionsPath) + "/" + name + suffix + "host")
 	if err != nil {
-		return &types.Connector{}, fmt.Errorf("Could not retrieve connection-token files: %w", err)
+		return vci, fmt.Errorf("Could not retrieve connection-token files: %w", err)
 	}
-	port, err := ioutil.ReadFile(types.ConnPath + name + suffix + "port")
+	port, err := ioutil.ReadFile(types.GetSkupperPath(types.ConnectionsPath) + "/" + name + suffix + "port")
 	if err != nil {
-		return &types.Connector{}, fmt.Errorf("Could not retrieve connection-token files: %w", err)
+		return vci, fmt.Errorf("Could not retrieve connection-token files: %w", err)
 	}
-	connector := &types.Connector{
+	vci.Connector = &types.Connector{
 		Name: name,
 		Host: string(host),
 		Port: string(port),
 		Role: string(role),
-	}
-
-	return connector, nil
-}
-
-func (cli *VanClient) ConnectorInspect(name string) (*types.ConnectorInspectResponse, error) {
-	vci := &types.ConnectorInspectResponse{}
-
-	current, err := docker.InspectContainer("skupper-router", cli.DockerInterface)
-	if err != nil {
-		// TODO: is not found versus error
-		return vci, fmt.Errorf("Unable to retrieve transport container (need init?): %w", err)
-	}
-
-	mode := qdr.GetTransportMode(current)
-	connector, err := getConnector(name, mode)
-	if err != nil {
-		return vci, fmt.Errorf("Unable to get connector: %w", err)
-	} else {
-		vci.Connector = connector
 	}
 
 	connections, err := qdr.GetConnections(cli.DockerInterface)

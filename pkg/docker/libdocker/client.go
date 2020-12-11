@@ -6,6 +6,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
+
 	//dockerimagetypes "github.com/docker/docker/api/types/image"
 	//dockernetworktypes "github.com/docker/docker/api/types/network"
 	dockerapi "github.com/docker/docker/client"
@@ -18,6 +19,7 @@ type Interface interface {
 	StartContainer(id string) error
 	RestartContainer(id string, timeout time.Duration) error
 	StopContainer(id string, timeout time.Duration) error
+	WaitContainer(name string, timeout time.Duration) error
 	UpdateContainerResources(id string, updateConfig dockercontainer.UpdateConfig) error
 	RemoveContainer(id string, opts dockertypes.ContainerRemoveOptions) error
 	InspectImageByRef(imageRef string) (*dockertypes.ImageInspect, error)
@@ -37,6 +39,7 @@ type Interface interface {
 	ConnectContainerToNetwork(id string, containerid string) error
 	DisconnectContainerFromNetwork(id string, containerid string, force bool) error
 	RemoveNetwork(id string) error
+	ServerVersion() (dockertypes.Version, error)
 }
 
 func getDockerClient(dockerEndpoint string) (*dockerapi.Client, error) {
@@ -48,8 +51,8 @@ func getDockerClient(dockerEndpoint string) (*dockerapi.Client, error) {
 	return dockerapi.NewClientWithOpts(dockerapi.FromEnv, dockerapi.WithAPIVersionNegotiation())
 }
 
-func ConnectToDockerOrDie(dockerEndpoint string, requestTimeout, imagePullProgressDeadline time.Duration) Interface {
-	client, err := getDockerClient(dockerEndpoint)
+func ConnectToDockerOrDie(requestTimeout, imagePullProgressDeadline time.Duration) Interface {
+	client, err := dockerapi.NewClientWithOpts(dockerapi.FromEnv, dockerapi.WithAPIVersionNegotiation())
 	if err != nil {
 		log.Fatalf("Couldn't connect to docker: %v", err)
 	}

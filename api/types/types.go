@@ -15,20 +15,44 @@ limitations under the License.
 package types
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/docker/go-connections/nat"
 )
 
 const (
 	DefaultVanName    string = "skupper"
 	DefaultBridgeName string = "skupper0"
-	HostPath          string = "/tmp/skupper"
-	CertPath                 = HostPath + "/qpid-dispatch-certs/"
-	ConnPath                 = HostPath + "/connections/"
-	ConsoleUsersPath         = HostPath + "/console-users/"
-	SaslConfigPath           = HostPath + "/sasl-config/"
-	ServicePath              = HostPath + "/services/"
-	SitePath                 = HostPath + "/sites/"
 )
+
+type Path int
+
+const (
+	HostPath Path = iota
+	CertsPath
+	ConnectionsPath
+	ConfigPath
+	ConsoleUsersPath
+	SaslConfigPath
+	ServicesPath
+	SitesPath
+)
+
+var skupperPaths = map[Path]string{
+	HostPath:         "",
+	CertsPath:        "qpid-dispatch-certs",
+	ConnectionsPath:  "connections",
+	ConfigPath:       "config",
+	ConsoleUsersPath: "console-users",
+	SaslConfigPath:   "sasl-config",
+	ServicesPath:     "services",
+	SitesPath:        "sites",
+}
+
+func GetSkupperPath(p Path) string {
+	return filepath.Join(os.Getenv("SKUPPER_TMPDIR"), "skupper", skupperPaths[p])
+}
 
 // TransportMode describes how a qdr is intended to be deployed, either interior or edge
 type TransportMode string
@@ -44,12 +68,13 @@ const (
 const (
 	TransportDeploymentName string = "skupper-router"
 	TransportComponentName  string = "router"
-	DefaultTransportImage   string = "quay.io/interconnectedcloud/qdrouterd"
+	DefaultTransportImage   string = "quay.io/skupper/qdrouterd:0.4"
 	TransportContainerName  string = "router"
 	TransportLivenessPort   int32  = 9090
 	TransportEnvConfig      string = "QDROUTERD_CONF"
 	TransportSaslConfig     string = "skupper-sasl-config"
 	TransportNetworkName    string = "skupper-network"
+	TransportConfigFile     string = "qdrouterd.json"
 )
 
 var TransportPrometheusAnnotations = map[string]string{
@@ -58,12 +83,12 @@ var TransportPrometheusAnnotations = map[string]string{
 }
 
 // Controller constants
+// TODO: revert controller image
 const (
 	ControllerDeploymentName string = "skupper-service-controller"
 	ControllerComponentName  string = "controller"
-	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller"
+	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller:0.4"
 	ControllerContainerName  string = "service-controller"
-	DefaultProxyImage        string = "quay.io/skupper/proxy:0.3"
 	ControllerConfigPath     string = "/etc/messaging/"
 )
 
@@ -93,8 +118,10 @@ const (
 	ConsoleAuthModeUnsecured                 = "unsecured"
 )
 
-// Assembly constants
+// Router constants
 const (
+	AmqpDefaultPort         int32  = 5672
+	AmqpsDefaultPort        int32  = 5671
 	EdgeRole                string = "edge"
 	EdgeRouteName           string = "skupper-edge"
 	EdgeListenerPort        int32  = 45671
@@ -106,21 +133,18 @@ const (
 
 // Controller Service Interface constants
 const (
-	ServiceSyncAddress   = "mc/$skupper-service-sync"
-	LocalServiceDefsFile = ServicePath + "/local/skupper-services"
-	AllServiceDefsFile   = ServicePath + "/all/skupper-services"
+	ServiceSyncAddress = "mc/$skupper-service-sync"
 )
 
 // TODO: what is possiblity of using types from skupper itself (e.g. no namespace for docker
 // or we change the name to endpoint, etc.
 // RouterSpec is the specification of VAN network with router, controller and assembly
 type RouterSpec struct {
-	Name string `json:"name,omitempty"`
-	//	Namespace      string          `json:"namespace,omitempty"`
+	Name           string          `json:"name,omitempty"`
 	AuthMode       ConsoleAuthMode `json:"authMode,omitempty"`
 	Transport      DeploymentSpec  `json:"transport,omitempty"`
 	Controller     DeploymentSpec  `json:"controller,omitempty"`
-	Assembly       AssemblySpec    `json:"assembly,omitempty"`
+	RouterConfig   string          `json:"routerConfig,omitempty"`
 	Users          []User          `json:"users,omitempty"`
 	CertAuthoritys []CertAuthority `json:"certAuthoritys,omitempty"`
 	Credentials    []Credential    `json:"credentials,omitempty"`
@@ -131,44 +155,10 @@ type DeploymentSpec struct {
 	Image        string            `json:"image,omitempty"`
 	LivenessPort int32             `json:"livenessPort,omitempty"`
 	Labels       map[string]string `json:"labels,omitempty"`
-	//	Annotations     map[string]string      `json:"annotations,omitempty"`
-	EnvVar  []string          `json:"envVar,omitempty"`
-	Ports   nat.PortSet       `json:"ports,omitempty"`
-	Volumes []string          `json:"volumes,omitempty"`
-	Mounts  map[string]string `json:"mounts,omitempty"`
-}
-
-// AssemblySpec for the links and connectors that form the VAN topology
-type AssemblySpec struct {
-	Name                  string       `json:"name,omitempty"`
-	Mode                  string       `json:"mode,omitempty"`
-	Listeners             []Listener   `json:"listeners,omitempty"`
-	InterRouterListeners  []Listener   `json:"interRouterListeners,omitempty"`
-	EdgeListeners         []Listener   `json:"edgeListeners,omitempty"`
-	SslProfiles           []SslProfile `json:"sslProfiles,omitempty"`
-	Connectors            []Connector  `json:"connectors,omitempty"`
-	InterRouterConnectors []Connector  `json:"interRouterConnectors,omitempty"`
-	EdgeConnectors        []Connector  `json:"edgeConnectors,omitempty"`
-}
-
-type Listener struct {
-	Name             string `json:"name,omitempty"`
-	Host             string `json:"host,omitempty"`
-	Port             int32  `json:"port"`
-	RouteContainer   bool   `json:"routeContainer,omitempty"`
-	Http             bool   `json:"http,omitempty"`
-	Cost             int32  `json:"cost,omitempty"`
-	SslProfile       string `json:"sslProfile,omitempty"`
-	SaslMechanisms   string `json:"saslMechanisms,omitempty"`
-	AuthenticatePeer bool   `json:"authenticatePeer,omitempty"`
-	LinkCapacity     int32  `json:"linkCapacity,omitempty"`
-}
-
-type SslProfile struct {
-	Name   string `json:"name,omitempty"`
-	Cert   string `json:"cert,omitempty"`
-	Key    string `json:"key,omitempty"`
-	CaCert string `json:"caCert,omitempty"`
+	EnvVar       []string          `json:"envVar,omitempty"`
+	Ports        nat.PortSet       `json:"ports,omitempty"`
+	Volumes      []string          `json:"volumes,omitempty"`
+	Mounts       map[string]string `json:"mounts,omitempty"`
 }
 
 type ConnectorRole string
@@ -194,9 +184,10 @@ type Credential struct {
 	CA          string
 	Name        string
 	Subject     string
-	Hosts       string
+	Hosts       []string
 	ConnectJson bool
 	Post        bool
+	Data        map[string][]byte
 }
 
 type CertAuthority struct {
@@ -216,19 +207,22 @@ type TransportConnectedSites struct {
 }
 
 type ServiceInterface struct {
-	Address  string                   `json:"address"`
-	Protocol string                   `json:"protocol"`
-	Port     int                      `json:"port"`
-	Headless *Headless                `json:"headless,omitempty"`
-	Targets  []ServiceInterfaceTarget `json:"targets"`
-	Origin   string                   `json:"origin,omitempty"`
-	Alias    string                   `json:"alias,omitempty"`
+	Address      string                   `json:"address"`
+	Protocol     string                   `json:"protocol"`
+	Port         int                      `json:"port"`
+	EventChannel bool                     `json:"eventchannel,omitempty"`
+	Aggregate    string                   `json:"aggregate,omitempty"`
+	Headless     *Headless                `json:"headless,omitempty"`
+	Targets      []ServiceInterfaceTarget `json:"targets"`
+	Origin       string                   `json:"origin,omitempty"`
+	Alias        string                   `json:"alias,omitempty"`
 }
 
 type ServiceInterfaceTarget struct {
 	Name       string `json:"name,omitempty"`
 	Selector   string `json:"selector"`
 	TargetPort int    `json:"targetPort,omitempty"`
+	Service    string `json:"service,omitempty"`
 }
 
 type Headless struct {

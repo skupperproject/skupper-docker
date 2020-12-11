@@ -83,7 +83,7 @@ func (cli *VanClient) RouterRemove() []error {
 	}
 
 	// remove host files
-	err = os.RemoveAll(types.HostPath)
+	err = os.RemoveAll(types.GetSkupperPath(types.HostPath))
 	if err != nil {
 		results = append(results, fmt.Errorf("Failed to remove skupper files and directory: %w", err))
 	}
