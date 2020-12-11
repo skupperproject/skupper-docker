@@ -277,7 +277,7 @@ func (c *Controller) runServiceSync() error {
 							log.Printf("Skupper service sync update from %s was not valid json: %s", origin, err)
 						}
 					} else {
-						log.Println("Skupper service sync update from %s was not a string", origin)
+						log.Printf("Skupper service sync update from %s was not a string", origin)
 					}
 				}
 			} else {
