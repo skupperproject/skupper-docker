@@ -22,7 +22,7 @@ func (cli *VanClient) SiteConfigCreate(spec types.SiteConfigSpec) (*types.SiteCo
 	if err != nil {
 		return nil, err
 	}
-	err = ioutil.WriteFile(types.GetSkupperPath(types.SitesPath)+types.DefaultBridgeName+".json", encoded, 0755)
+	err = ioutil.WriteFile(types.GetSkupperPath(types.SitesPath)+"/"+types.DefaultBridgeName+".json", encoded, 0755)
 	if err != nil {
 		return nil, err
 	}
