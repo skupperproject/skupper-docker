@@ -11,10 +11,10 @@ type VanClient struct {
 	DockerInterface libdocker.Interface
 }
 
-func NewClient(endpoint string) (*VanClient, error) {
+func NewClient() (*VanClient, error) {
 	c := &VanClient{}
 
-	c.DockerInterface = libdocker.ConnectToDockerOrDie(endpoint, 0, 10*time.Second)
+	c.DockerInterface = libdocker.ConnectToDockerOrDie(0, 10*time.Second)
 
 	return c, nil
 }

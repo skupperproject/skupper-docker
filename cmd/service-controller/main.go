@@ -70,12 +70,11 @@ func getTlsConfig(verify bool, cert, key, ca string) (*tls.Config, error) {
 
 func main() {
 	siteId := os.Getenv("SKUPPER_SITE_ID")
-	endpoint := os.Getenv("SKUPPER_DOCKER_ENDPOINT")
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := SetupSignalHandler()
 
-	cli, err := client.NewClient(endpoint)
+	cli, err := client.NewClient()
 	if err != nil {
 		log.Fatal("Error getting van client", err.Error())
 	}

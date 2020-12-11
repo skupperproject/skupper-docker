@@ -705,11 +705,10 @@ func NewCmdVersion(newClient cobraFunc) *cobra.Command {
 type cobraFunc func(cmd *cobra.Command, args []string)
 
 func newClient(cmd *cobra.Command, args []string) {
-	cli, _ = client.NewClient(dockerEndpoint)
+	cli, _ = client.NewClient()
 }
 
 var rootCmd *cobra.Command
-var dockerEndpoint string
 var cli types.VanClientInterface
 
 func init() {
@@ -752,7 +751,6 @@ func init() {
 		cmdBind,
 		cmdUnbind,
 		cmdVersion)
-	rootCmd.PersistentFlags().StringVarP(&dockerEndpoint, "endpoint", "e", "", "docker endpoint to use")
 }
 
 func main() {
