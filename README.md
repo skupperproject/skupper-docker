@@ -15,6 +15,19 @@ After this command is completed, you can create a skupper site:
  ./skupper-docker init
 ```
 
+3. To connect to another Skupper site, you must update the generated token with the site UID. 
+
+a) Get the UID from the Skupper site you are trying to connect to:
+```
+$ kubectl get -o template cm/skupper-site --template={{.metadata.uid}}
+```
+
+b) Add the UID to the token.
+For example, if you followed the [Getting Started](https://skupper.io/start/index.html) and the UID is `fba75742-f594-4329-ae70-18698b88cd4a`, add the following line to `$HOME/secret.yaml` under `metadata`:
+```
+ skupper.io/generated-by: fba75742-f594-4329-ae70-18698b88cd4a
+```
+
 To troubleshoot issues:
 
 1. Run `docker ps` to view the containers:
@@ -50,3 +63,5 @@ Connections
 
 This shows typical output for a successfully instantiated skupper site.
 If you do not see similar output, check your Docker network configuration, for example firewall settings.
+
+
