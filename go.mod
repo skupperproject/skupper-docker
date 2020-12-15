@@ -20,6 +20,7 @@ require (
 	github.com/spf13/cobra v0.0.6
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55 // indirect
 	google.golang.org/grpc v1.21.1 // indirect
+	gotest.tools v2.2.0+incompatible
 	gotest.tools/v3 v3.0.3 // indirect
 )
 

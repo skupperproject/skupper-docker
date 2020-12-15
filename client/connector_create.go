@@ -33,22 +33,6 @@ func generateConnectorName(path string) (string, error) {
 	return "conn" + strconv.Itoa(max), nil
 }
 
-func (cli *VanClient) isOwnToken(secretFile string) (bool, error) {
-	content, err := certs.GetSecretContent(secretFile)
-	if err != nil {
-		return false, err
-	}
-	generatedBy, ok := content["skupper.io/generated-by"]
-	if !ok {
-		return false, fmt.Errorf("Can't find secret origin.")
-	}
-	siteConfig, err := cli.SiteConfigInspect("skupper0")
-	if err != nil {
-		return false, err
-	}
-	return siteConfig.UID == string(generatedBy), nil
-}
-
 func (cli *VanClient) ConnectorCreate(secretFile string, options types.ConnectorCreateOptions) (string, error) {
 
 	// TODO certs should return err
