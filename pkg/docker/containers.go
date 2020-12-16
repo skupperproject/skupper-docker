@@ -62,10 +62,6 @@ func getLabels(service types.ServiceInterface, isLocal bool) map[string]string {
 	target := ""
 	targetType := "container"
 	if isLocal {
-		//		target = service.Targets[0].Name
-		//		if service.Targets[0].Selector == "internal.skupper.io/hostservice" {
-		//			targetType = "host"
-		//		}
 		targetType = "host"
 	}
 
