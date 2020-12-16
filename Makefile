@@ -33,10 +33,10 @@ release/linux/skupper-docker: cmd/skupper-docker/main.go
 	GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o release/linux/skupper-docker cmd/skupper-docker/main.go
 
 release/windows/skupper-docker: cmd/skupper-docker/main.go
-	GOOS=windows GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o release/windows/skupper-docker cmd/skupper-docker/main.go
+	GOOS=windows GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o release/windows/skupper-docker.exe cmd/skupper-docker/main.go
 
 release/windows.zip: release/windows/skupper-docker
-	zip -j release/windows.zip release/windows/skupper-docker
+	zip -j release/windows.zip release/windows/skupper-docker.exe
 
 release/darwin/skupper-docker: cmd/skupper-docker/main.go
 	GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o release/darwin/skupper-docker cmd/skupper-docker/main.go
