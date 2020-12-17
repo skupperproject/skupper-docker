@@ -1,4 +1,3 @@
-#version: 2.1
 version: 2.1
 
 orbs:
@@ -17,13 +16,21 @@ commands:
       - docker/install-docker
       - run: sudo rm -rf /usr/local/go
       - go/install
-
+  skupper-debug:
+    description: execute several diagnostics commands
+    steps:
+      - run: docker ps
+      - run: docker inspect skupper-router
+      - run: docker network inspect skupper-network
+      - run: docker logs skupper-service-controller
+      - run: docker exec -it skupper-router qdstat -a
 
 workflows:
   version: 2.1
   build-workflow:
     jobs:
       - build
+      - docker-integration
 
 jobs:
   build:
@@ -38,3 +45,22 @@ jobs:
       - run: go test -v ./...
       - run: ./skupper-docker init
       - run: make clean
+
+  docker-integration:
+    executor: go_and_docker_executor
+    steps:
+      - prepare_vm
+      - checkout
+      - run:
+          name: Setup tcp-echo container and skupper-docker
+          command: |
+            make
+            ./skupper-docker init
+            docker run -d --name tcp-go-echo-server quay.io/skupper/tcp-go-echo
+            ./skupper-docker expose container tcp-go-echo-server --address tcp-go-echo --port 9090 --target-port 9090
+      - skupper-debug
+      - run:
+          name: Run Integration Tests
+          #no_output_timeout: 30m
+          command: |
+            go test -tags=integration -v -p 1 ./test/integration/...
