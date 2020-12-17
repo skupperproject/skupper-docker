@@ -25,7 +25,7 @@ var someBackoff wait.Backoff = wait.Backoff{
 }
 
 func TestTcpEcho(t *testing.T) {
-	docker := libdocker.ConnectToDockerOrDie("", 0, 10*time.Second)
+	docker := libdocker.ConnectToDockerOrDie(0, 10*time.Second)
 
 	isError := func(err error) bool {
 		return err != nil
