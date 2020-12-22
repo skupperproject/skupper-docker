@@ -115,6 +115,9 @@ func (c *Controller) updateServiceBindings(required types.ServiceInterface) erro
 		if bindings.eventChannel != required.EventChannel {
 			bindings.eventChannel = required.EventChannel
 		}
+		if bindings.origin != required.Origin {
+			bindings.origin = required.Origin
+		}
 
 		for _, t := range required.Targets {
 			targetPort := getTargetPort(required, t)

@@ -175,10 +175,6 @@ func (c *Controller) ensureProxyFor(bindings *ServiceBindings) error {
 	if os.Getenv("SKUPPER_MAP_TO_HOST") != "" {
 		mapToHost = true
 	}
-	envVar := os.Environ()
-	for _, k := range envVar {
-		fmt.Printf("Env var %s\n", k)
-	}
 
 	if !exists {
 		log.Println("Deploying proxy: ", serviceInterface.Address)

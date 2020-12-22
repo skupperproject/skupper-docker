@@ -86,6 +86,7 @@ func updateServiceInterface(service *types.ServiceInterface, overwriteIfExists b
 
 	_, ok := current[service.Address]
 	if overwriteIfExists || !ok {
+		service.Origin = ""
 		current[service.Address] = *service
 	}
 
