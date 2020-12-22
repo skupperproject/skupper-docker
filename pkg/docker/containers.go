@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	dockercontainer "github.com/docker/docker/api/types/container"
 	dockermounttypes "github.com/docker/docker/api/types/mount"
 	dockernetworktypes "github.com/docker/docker/api/types/network"
+	"github.com/docker/go-connections/nat"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker/libdocker"
@@ -83,7 +85,7 @@ func getLabels(service types.ServiceInterface, isLocal bool) map[string]string {
 	}
 }
 
-func getProxyContainerCreateConfig(service types.ServiceInterface, config string, osType string) *dockertypes.ContainerCreateConfig {
+func getProxyContainerCreateConfig(service types.ServiceInterface, qdrConfig string, mapToHost bool, osType string) *dockertypes.ContainerCreateConfig {
 	var imageName string
 	if os.Getenv("QDROUTERD_IMAGE") != "" {
 		imageName = os.Getenv("QDROUTERD_IMAGE")
@@ -94,7 +96,7 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 	labels := getLabels(service, true)
 	envVars := []string{}
 	envVars = append(envVars, os.Getenv("SKUPPER_TMPDIR"))
-	envVars = append(envVars, "QDROUTERD_CONF="+config)
+	envVars = append(envVars, "QDROUTERD_CONF="+qdrConfig)
 	envVars = append(envVars, "QDROUTERD_CONF_TYPE=json")
 	envVars = append(envVars, "NAMESPACE=skupper")
 	if os.Getenv("PN_TRACE_FRM") != "" {
@@ -128,6 +130,11 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 		Env:      envVars,
 		Labels:   labels,
 	}
+	if mapToHost {
+		containerCfg.ExposedPorts = make(map[nat.Port]struct{})
+		containerCfg.ExposedPorts[nat.Port(strconv.Itoa(service.Port)+"/"+service.Protocol)] = struct{}{}
+	}
+
 	hostCfg := &dockercontainer.HostConfig{
 		Mounts: []dockermounttypes.Mount{
 			{
@@ -136,9 +143,19 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 				Target: "/etc/qpid-dispatch-certs/skupper-internal/",
 			},
 		},
-		ExtraHosts: extraHosts,
-		Privileged: true,
+		NetworkMode: "skupper-network",
+		ExtraHosts:  extraHosts,
+		Privileged:  true,
 	}
+	if mapToHost {
+		hostCfg.PortBindings = make(map[nat.Port][]nat.PortBinding)
+		hostCfg.PortBindings[nat.Port(strconv.Itoa(service.Port)+"/"+service.Protocol)] = []nat.PortBinding{
+			{
+				HostPort: strconv.Itoa(service.Port),
+			},
+		}
+	}
+
 	networkCfg := &dockernetworktypes.NetworkingConfig{
 		EndpointsConfig: map[string]*dockernetworktypes.EndpointSettings{
 			types.TransportNetworkName: {},
@@ -155,12 +172,12 @@ func getProxyContainerCreateConfig(service types.ServiceInterface, config string
 	return opts
 }
 
-func NewProxyContainer(svcDef types.ServiceInterface, config string, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
+func NewProxyContainer(svcDef types.ServiceInterface, qdrConfig string, mapToHost bool, dd libdocker.Interface) (*dockertypes.ContainerCreateConfig, error) {
 	version, err := dd.ServerVersion()
 	if err != nil {
 		return nil, err
 	}
-	opts := getProxyContainerCreateConfig(svcDef, config, version.Os)
+	opts := getProxyContainerCreateConfig(svcDef, qdrConfig, mapToHost, version.Os)
 
 	_, err = dd.CreateContainer(*opts)
 	if err != nil {
