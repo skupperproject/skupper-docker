@@ -87,7 +87,7 @@ var TransportPrometheusAnnotations = map[string]string{
 const (
 	ControllerDeploymentName string = "skupper-service-controller"
 	ControllerComponentName  string = "controller"
-	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller:0.4"
+	DefaultControllerImage   string = "quay.io/skupper/skupper-docker-controller"
 	ControllerContainerName  string = "service-controller"
 	ControllerConfigPath     string = "/etc/messaging/"
 )
