@@ -288,6 +288,9 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		"SKUPPER_PROXY_IMAGE=" + van.Controller.Image,
 		"SKUPPER_HOST=" + skupperHost,
 	}
+	if options.MapToHost {
+		van.Controller.EnvVar = append(van.Controller.EnvVar, "SKUPPER_MAP_TO_HOST=true")
+	}
 	if options.TraceLog {
 		van.Controller.EnvVar = append(van.Controller.EnvVar, "PN_TRACE_FRM=1")
 	}

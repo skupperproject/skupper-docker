@@ -171,10 +171,14 @@ func (c *Controller) ensureProxyFor(bindings *ServiceBindings) error {
 	}
 
 	config, _ := qdr.GetRouterConfigForProxy(serviceInterface, c.origin)
+	mapToHost := false
+	if os.Getenv("SKUPPER_MAP_TO_HOST") != "" {
+		mapToHost = true
+	}
 
 	if !exists {
 		log.Println("Deploying proxy: ", serviceInterface.Address)
-		proxyContainer, err := docker.NewProxyContainer(serviceInterface, config, c.vanClient.DockerInterface)
+		proxyContainer, err := docker.NewProxyContainer(serviceInterface, config, mapToHost, c.vanClient.DockerInterface)
 		if err != nil {
 			return fmt.Errorf("Failed to create proxy container: %w", err)
 		}
@@ -194,7 +198,7 @@ func (c *Controller) ensureProxyFor(bindings *ServiceBindings) error {
 			if err != nil {
 				return fmt.Errorf("Failed to delete proxy container: %w", err)
 			}
-			newProxyContainer, err := docker.NewProxyContainer(serviceInterface, config, c.vanClient.DockerInterface)
+			newProxyContainer, err := docker.NewProxyContainer(serviceInterface, config, mapToHost, c.vanClient.DockerInterface)
 			if err != nil {
 				return fmt.Errorf("Failed to re-create proxy container: %w", err)
 			}

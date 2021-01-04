@@ -21,7 +21,7 @@ type SiteConfigSpec struct {
 	AuthMode            string
 	User                string
 	Password            string
-	ClusterLocal        bool
+	MapToHost           bool
 	Replicas            int32
 	TraceLog            bool
 }

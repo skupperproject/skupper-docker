@@ -188,6 +188,7 @@ installation that can then be connected to other skupper installations`,
 	cmd.Flags().StringVarP(&routerCreateOpts.AuthMode, "console-auth", "", "", "Authentication mode for console(s). One of: 'internal', 'unsecured'")
 	cmd.Flags().StringVarP(&routerCreateOpts.User, "console-user", "", "", "Router console user. Valid only when --console-auth=internal")
 	cmd.Flags().StringVarP(&routerCreateOpts.Password, "console-password", "", "", "Skupper console user. Valid only when --router-console-auth=internal")
+	cmd.Flags().BoolVarP(&routerCreateOpts.MapToHost, "publish-to-host", "", false, "Port map services to host")
 	cmd.Flags().BoolVarP(&routerCreateOpts.TraceLog, "enable-trace-log", "", false, "Enable router trace log")
 	cmd.Flags().MarkHidden("enable-trace-log")
 
