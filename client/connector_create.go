@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/skupperproject/skupper-docker/api/types"
 	"github.com/skupperproject/skupper-docker/pkg/docker"
@@ -77,8 +78,14 @@ func (cli *VanClient) ConnectorCreate(secretFile string, options types.Connector
 				return "", fmt.Errorf("Failed to write connector file: %w", err)
 			}
 		} else {
+			paths := strings.Split(k, "/")
+			if len(paths) > 1 {
+				if err := os.MkdirAll(connPath+"/"+strings.Join(paths[:len(paths)-1], "/"), 0755); err != nil {
+					return "", fmt.Errorf("Failed to create metadata directory: %w", err)
+				}
+			}
 			if err := ioutil.WriteFile(connPath+"/"+k, v, 0755); err != nil {
-				return "", fmt.Errorf("Failed to write connector certificate file: %w", err)
+				return "", fmt.Errorf("Failed to write metadata file: %w", err)
 			}
 		}
 	}
