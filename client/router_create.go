@@ -88,7 +88,7 @@ func (cli *VanClient) GetRouterSpecFromOpts(options types.SiteConfigSpec, siteId
 		van.Name = options.SkupperName
 	}
 
-	if os.Getenv("QDROUTERD_MAGE") != "" {
+	if os.Getenv("QDROUTERD_IMAGE") != "" {
 		van.Transport.Image = os.Getenv("QDROUTERD_IMAGE")
 	} else {
 		van.Transport.Image = types.DefaultTransportImage
